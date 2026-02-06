@@ -23,7 +23,26 @@ type RawTopic = {
   childCount?: number;
 };
 
-const normalizeClue = (clue: RawClue) => ({
+type NormalizedClue = {
+  prompt: string;
+  answer: string;
+  air_date?: string;
+  round?: number;
+  value?: number;
+  daily_double_value?: number;
+  category?: string;
+};
+
+type NormalizedTopic = {
+  id: string;
+  title: string;
+  summary: string;
+  clueSamples: NormalizedClue[];
+  childCount: number;
+  children: NormalizedTopic[];
+};
+
+const normalizeClue = (clue: RawClue): NormalizedClue => ({
   prompt: clue.prompt ?? clue.answer ?? "",
   answer: clue.answer ?? clue.question ?? "",
   air_date: clue.air_date,
@@ -33,7 +52,7 @@ const normalizeClue = (clue: RawClue) => ({
   category: clue.category,
 });
 
-const normalizeTopic = (topic: RawTopic) => ({
+const normalizeTopic = (topic: RawTopic): NormalizedTopic => ({
   id: topic.id,
   title: topic.title,
   summary: topic.summary,
@@ -46,6 +65,7 @@ const normalizeTopic = (topic: RawTopic) => ({
       summary: child.summary,
       childCount: child.childCount ?? child.children?.length ?? 0,
       clueSamples: (child.clueSamples ?? child.sampleClues ?? []).map(normalizeClue),
+      children: [],
     })) ?? [],
 });
 
