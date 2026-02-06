@@ -1,0 +1,68 @@
+[
+  {
+    "id": "history",
+    "title": "History",
+    "summary": "Civilizations, wars, leaders, and pivotal events through time.",
+    "keywords": ["HISTORY", "WAR", "BATTLE", "ANCIENT", "EMPIRE", "PRESIDENT", "CIVIL", "REVOLUTION", "MONARCH", "ROYAL", "DYNASTY"]
+  },
+  {
+    "id": "literature",
+    "title": "Literature",
+    "summary": "Authors, novels, plays, poetry, and literary movements.",
+    "keywords": ["LITERATURE", "NOVEL", "BOOK", "AUTHOR", "POET", "SHAKESPEARE", "PLAY", "FICTION", "CLASSICS", "LIT"]
+  },
+  {
+    "id": "science",
+    "title": "Science",
+    "summary": "Physics, biology, chemistry, space, and scientific discoveries.",
+    "keywords": ["SCIENCE", "CHEM", "PHYS", "BIO", "SPACE", "ASTRO", "PLANET", "NATURE", "MEDICINE", "ANATOMY", "TECH"]
+  },
+  {
+    "id": "geography",
+    "title": "Geography",
+    "summary": "Countries, capitals, landforms, and world regions.",
+    "keywords": ["GEOGRAPHY", "WORLD", "COUNTRY", "CAPITAL", "RIVER", "MOUNTAIN", "ISLAND", "CITY", "MAP", "PLACES", "AFRICA", "ASIA", "EUROPE", "AMERICA"]
+  },
+  {
+    "id": "sports",
+    "title": "Sports",
+    "summary": "Games, leagues, athletes, and iconic competitions.",
+    "keywords": ["SPORT", "NFL", "NBA", "MLB", "NHL", "SOCCER", "FOOTBALL", "BASKETBALL", "BASEBALL", "HOCKEY", "OLYMPIC", "TENNIS", "GOLF"]
+  },
+  {
+    "id": "pop-culture",
+    "title": "Pop Culture",
+    "summary": "Movies, television, music, and celebrity culture.",
+    "keywords": ["MOVIE", "FILM", "TV", "TELEVISION", "MUSIC", "SONG", "ALBUM", "POP", "CELEB", "HOLLYWOOD", "ACTOR", "ACTRESS", "BAND"]
+  },
+  {
+    "id": "arts",
+    "title": "Arts",
+    "summary": "Visual arts, architecture, theater, and performance.",
+    "keywords": ["ART", "PAINT", "MUSEUM", "THEATER", "OPERA", "BALLET", "ARCHITECTURE", "SCULPTURE"]
+  },
+  {
+    "id": "words-language",
+    "title": "Words & Language",
+    "summary": "Vocabulary, spelling, etymology, and language trivia.",
+    "keywords": ["WORD", "WORDS", "LANGUAGE", "VOCAB", "SPELL", "ANAGRAM", "RHYM", "PHRASE", "ETYM", "SYNONYM", "HOMONYM", "FOREIGN"]
+  },
+  {
+    "id": "business",
+    "title": "Business & Economy",
+    "summary": "Markets, money, companies, and economic history.",
+    "keywords": ["BUSINESS", "ECON", "MONEY", "MARKET", "BANK", "FINANCE", "CORPORATE", "STOCK", "INVEST"]
+  },
+  {
+    "id": "religion-myth",
+    "title": "Religion & Myth",
+    "summary": "Religions, mythology, and sacred texts.",
+    "keywords": ["BIBLE", "RELIGION", "MYTH", "GOD", "SAINT", "SAINTS", "MYTHOLOGY", "CHURCH"]
+  },
+  {
+    "id": "misc",
+    "title": "Miscellaneous",
+    "summary": "Topics that do not fit elsewhere.",
+    "keywords": []
+  }
+]

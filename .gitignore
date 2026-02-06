@@ -24,6 +24,10 @@
 .DS_Store
 *.pem
 
+# data
+/data/
+/jeopardy_clues.tsv
+
 # debug
 npm-debug.log*
 yarn-debug.log*

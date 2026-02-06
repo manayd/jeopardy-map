@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "ingest": "node scripts/ingest-jeopardy.mjs",
+    "validate:jeopardy": "node scripts/validate-jeopardy.mjs",
+    "tree:topics": "node scripts/print-topic-tree.mjs"
   },
   "dependencies": {
     "next": "16.1.6",

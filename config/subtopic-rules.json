@@ -1,0 +1,384 @@
+{
+  "history": [
+    {
+      "id": "american-history",
+      "title": "American History",
+      "summary": "U.S. events, presidents, founding documents, and domestic conflicts.",
+      "keywords": ["AMERICAN", "U.S.", "USA", "UNITED STATES", "PRESIDENT", "PRESIDENTS", "WHITE HOUSE", "CONGRESS", "CAPITOL", "CONSTITUTION", "FOUNDING", "REVOLUTION", "CIVIL WAR", "COLONIAL", "STATE"]
+    },
+    {
+      "id": "wars-conflicts",
+      "title": "Wars & Conflicts",
+      "summary": "Military conflicts, battles, and wartime history.",
+      "keywords": ["WAR", "WARS", "BATTLE", "WWI", "WWII", "WORLD WAR", "ARMY", "NAVY"]
+    },
+    {
+      "id": "ancient-history",
+      "title": "Ancient History",
+      "summary": "Ancient civilizations, empires, and classical eras.",
+      "keywords": ["ANCIENT", "ROME", "ROMAN", "GREECE", "GREEK", "EGYPT", "PHARAOH", "EMPIRE", "EMPIRES"]
+    },
+    {
+      "id": "royalty",
+      "title": "Royalty & Monarchy",
+      "summary": "Kings, queens, dynasties, and royal history.",
+      "keywords": ["ROYAL", "ROYALTY", "KING", "QUEEN", "MONARCH", "DYNASTY", "CROWN"]
+    },
+    {
+      "id": "world-history",
+      "title": "World History",
+      "summary": "Non-U.S. regions, global events, and international history.",
+      "keywords": ["WORLD", "EUROPE", "ASIA", "AFRICA", "LATIN", "BRITISH", "FRENCH", "GERMAN", "RUSSIAN", "CHINA", "JAPAN", "INDIA", "MIDDLE EAST"]
+    },
+    {
+      "id": "other-history",
+      "title": "General History",
+      "summary": "Historical topics that do not fit elsewhere.",
+      "keywords": []
+    }
+  ],
+  "literature": [
+    {
+      "id": "authors",
+      "title": "Authors & Writers",
+      "summary": "Authors, novelists, and literary figures.",
+      "keywords": ["AUTHOR", "AUTHORS", "WRITER", "WRITERS"]
+    },
+    {
+      "id": "poetry",
+      "title": "Poetry",
+      "summary": "Poets, poetry, and verse.",
+      "keywords": ["POET", "POETRY", "VERSE"]
+    },
+    {
+      "id": "shakespeare-drama",
+      "title": "Shakespeare & Drama",
+      "summary": "Plays, playwrights, and theatrical literature.",
+      "keywords": ["SHAKESPEARE", "PLAY", "PLAYWRIGHT", "DRAMA", "THEATRE"]
+    },
+    {
+      "id": "fiction",
+      "title": "Fiction",
+      "summary": "Novels, fiction, and storytelling categories.",
+      "keywords": ["FICTION", "NOVEL"]
+    },
+    {
+      "id": "nonfiction",
+      "title": "Nonfiction",
+      "summary": "Nonfiction, essays, biographies, and memoirs.",
+      "keywords": ["NONFICTION", "ESSAY", "MEMOIR", "BIOGRAPHY", "AUTOBIOGRAPHY"]
+    },
+    {
+      "id": "characters",
+      "title": "Literary Characters",
+      "summary": "Fictional and literary characters.",
+      "keywords": ["CHARACTER", "CHARACTERS"]
+    },
+    {
+      "id": "childrens",
+      "title": "Children's Literature",
+      "summary": "Books and authors for younger audiences.",
+      "keywords": ["CHILDREN", "KIDS", "YOUNG ADULT"]
+    },
+    {
+      "id": "world-literature",
+      "title": "World Literature",
+      "summary": "Regional and international literature.",
+      "keywords": ["WORLD", "BRITISH", "AMERICAN", "IRISH", "RUSSIAN", "FRENCH", "GERMAN", "LATIN", "AFRICAN", "ASIAN"]
+    },
+    {
+      "id": "other-literature",
+      "title": "General Literature",
+      "summary": "Literary topics that do not fit elsewhere.",
+      "keywords": []
+    }
+  ],
+  "science": [
+    {
+      "id": "biology",
+      "title": "Biology",
+      "summary": "Life science, anatomy, and organisms.",
+      "keywords": ["BIOLOGY", "ANATOMY", "GENETIC", "ZOO", "BOTANY", "ECOSYSTEM"]
+    },
+    {
+      "id": "medicine",
+      "title": "Medicine & Health",
+      "summary": "Medical science, health, and diseases.",
+      "keywords": ["MEDICINE", "HEALTH", "DISEASE", "SURGERY"]
+    },
+    {
+      "id": "chemistry",
+      "title": "Chemistry",
+      "summary": "Chemistry and chemical reactions.",
+      "keywords": ["CHEM", "CHEMISTRY"]
+    },
+    {
+      "id": "physics",
+      "title": "Physics",
+      "summary": "Physics, forces, and physical science.",
+      "keywords": ["PHYSICS", "PHYSICAL SCIENCE"]
+    },
+    {
+      "id": "space",
+      "title": "Space & Astronomy",
+      "summary": "Astronomy, planets, and space exploration.",
+      "keywords": ["ASTRO", "SPACE", "PLANET", "SOLAR", "GALAXY", "STAR"]
+    },
+    {
+      "id": "earth",
+      "title": "Earth & Nature",
+      "summary": "Earth science, weather, oceans, and nature.",
+      "keywords": ["EARTH", "GEOLOGY", "WEATHER", "CLIMATE", "OCEAN", "MARINE", "NATURE"]
+    },
+    {
+      "id": "technology",
+      "title": "Technology",
+      "summary": "Technology, inventions, and computing.",
+      "keywords": ["TECH", "COMPUTER", "INVENTION", "ROBOT"]
+    },
+    {
+      "id": "other-science",
+      "title": "General Science",
+      "summary": "Science topics that do not fit elsewhere.",
+      "keywords": []
+    }
+  ],
+  "geography": [
+    {
+      "id": "us-geography",
+      "title": "U.S. Geography",
+      "summary": "U.S. states, cities, and geographic features.",
+      "keywords": ["U.S.", "USA", "UNITED STATES", "STATE", "AMERICA"]
+    },
+    {
+      "id": "capitals-cities",
+      "title": "Capitals & Cities",
+      "summary": "World capitals and major cities.",
+      "keywords": ["CAPITAL", "CAPITALS", "CITIES", "CITY"]
+    },
+    {
+      "id": "landforms-water",
+      "title": "Landforms & Water",
+      "summary": "Rivers, mountains, islands, and landforms.",
+      "keywords": ["RIVER", "LAKE", "MOUNTAIN", "ISLAND", "OCEAN", "SEA", "DESERT", "VOLCANO", "RANGE"]
+    },
+    {
+      "id": "regions",
+      "title": "World Regions",
+      "summary": "Continents, regions, and world geography.",
+      "keywords": ["WORLD", "EUROPE", "ASIA", "AFRICA", "LATIN", "MIDDLE EAST", "AROUND THE WORLD"]
+    },
+    {
+      "id": "other-geography",
+      "title": "General Geography",
+      "summary": "Geographic topics that do not fit elsewhere.",
+      "keywords": []
+    }
+  ],
+  "sports": [
+    {
+      "id": "baseball",
+      "title": "Baseball",
+      "summary": "Baseball history, teams, and trivia.",
+      "keywords": ["BASEBALL", "MLB"]
+    },
+    {
+      "id": "football",
+      "title": "Football",
+      "summary": "Football (American) and NFL trivia.",
+      "keywords": ["FOOTBALL", "NFL"]
+    },
+    {
+      "id": "basketball",
+      "title": "Basketball",
+      "summary": "Basketball leagues and trivia.",
+      "keywords": ["BASKETBALL", "NBA"]
+    },
+    {
+      "id": "olympics",
+      "title": "Olympics",
+      "summary": "Olympic games and athletes.",
+      "keywords": ["OLYMPIC", "OLYMPICS"]
+    },
+    {
+      "id": "soccer",
+      "title": "Soccer",
+      "summary": "World football, clubs, and tournaments.",
+      "keywords": ["SOCCER", "WORLD CUP", "FIFA"]
+    },
+    {
+      "id": "tennis",
+      "title": "Tennis",
+      "summary": "Tennis tournaments and players.",
+      "keywords": ["TENNIS"]
+    },
+    {
+      "id": "golf",
+      "title": "Golf",
+      "summary": "Golf tournaments and golfers.",
+      "keywords": ["GOLF"]
+    },
+    {
+      "id": "other-sports",
+      "title": "General Sports",
+      "summary": "Sports topics that do not fit elsewhere.",
+      "keywords": []
+    }
+  ],
+  "pop-culture": [
+    {
+      "id": "movies",
+      "title": "Movies",
+      "summary": "Films, directors, and movie trivia.",
+      "keywords": ["MOVIE", "MOVIES", "FILM", "HOLLYWOOD"]
+    },
+    {
+      "id": "television",
+      "title": "Television",
+      "summary": "TV shows and television history.",
+      "keywords": ["TV", "TELEVISION"]
+    },
+    {
+      "id": "music",
+      "title": "Music",
+      "summary": "Music, bands, and pop culture sounds.",
+      "keywords": ["MUSIC", "SONG", "ALBUM", "BAND", "POP"]
+    },
+    {
+      "id": "celebrities",
+      "title": "Celebrities",
+      "summary": "Celebrities, actors, and public figures.",
+      "keywords": ["CELEB", "CELEBRITY", "ACTOR", "ACTRESS", "STAR"]
+    },
+    {
+      "id": "theatre",
+      "title": "Theater & Broadway",
+      "summary": "Stage productions and theater culture.",
+      "keywords": ["THEATER", "THEATRE", "BROADWAY", "MUSICAL"]
+    },
+    {
+      "id": "other-pop",
+      "title": "General Pop Culture",
+      "summary": "Pop culture topics that do not fit elsewhere.",
+      "keywords": []
+    }
+  ],
+  "arts": [
+    {
+      "id": "visual-arts",
+      "title": "Visual Arts",
+      "summary": "Painting, sculpture, and visual arts.",
+      "keywords": ["ART", "PAINT", "PAINTING", "SCULPT", "MUSEUM", "GALLERY"]
+    },
+    {
+      "id": "architecture",
+      "title": "Architecture",
+      "summary": "Architecture and design history.",
+      "keywords": ["ARCHITECTURE", "ARCHITECT", "BUILDING"]
+    },
+    {
+      "id": "performing-arts",
+      "title": "Performing Arts",
+      "summary": "Dance, opera, ballet, and performance.",
+      "keywords": ["OPERA", "BALLET", "DANCE", "PERFORMANCE"]
+    },
+    {
+      "id": "other-arts",
+      "title": "General Arts",
+      "summary": "Art topics that do not fit elsewhere.",
+      "keywords": []
+    }
+  ],
+  "words-language": [
+    {
+      "id": "vocabulary",
+      "title": "Vocabulary & Spelling",
+      "summary": "Vocabulary, spelling, and usage.",
+      "keywords": ["WORD", "WORDS", "VOCAB", "SPELL", "SPELLING"]
+    },
+    {
+      "id": "wordplay",
+      "title": "Wordplay",
+      "summary": "Anagrams, puns, and word games.",
+      "keywords": ["ANAGRAM", "PUN", "RHYM", "WORDPLAY", "PALINDROME"]
+    },
+    {
+      "id": "etymology",
+      "title": "Etymology & Origins",
+      "summary": "Word origins and etymology.",
+      "keywords": ["ETYM", "ORIGIN", "ROOT"]
+    },
+    {
+      "id": "foreign-language",
+      "title": "Foreign Languages",
+      "summary": "Words and phrases from other languages.",
+      "keywords": ["FOREIGN", "FRENCH", "SPANISH", "ITALIAN", "GERMAN", "LATIN"]
+    },
+    {
+      "id": "other-words",
+      "title": "General Language",
+      "summary": "Language topics that do not fit elsewhere.",
+      "keywords": []
+    }
+  ],
+  "business": [
+    {
+      "id": "economy",
+      "title": "Economy & Markets",
+      "summary": "Economic concepts, markets, and trade.",
+      "keywords": ["ECON", "MARKET", "STOCK", "TRADE"]
+    },
+    {
+      "id": "companies",
+      "title": "Companies & Brands",
+      "summary": "Companies, brands, and business history.",
+      "keywords": ["COMPANY", "BUSINESS", "BRAND", "CORPORATE"]
+    },
+    {
+      "id": "money-banking",
+      "title": "Money & Banking",
+      "summary": "Money, banking, and finance.",
+      "keywords": ["MONEY", "BANK", "FINANCE", "CURRENCY"]
+    },
+    {
+      "id": "other-business",
+      "title": "General Business",
+      "summary": "Business topics that do not fit elsewhere.",
+      "keywords": []
+    }
+  ],
+  "religion-myth": [
+    {
+      "id": "bible",
+      "title": "Bible & Christianity",
+      "summary": "Bible, Christianity, and related history.",
+      "keywords": ["BIBLE", "CHRIST", "CHRISTIAN", "CHURCH"]
+    },
+    {
+      "id": "mythology",
+      "title": "Mythology",
+      "summary": "Myths, gods, and legends.",
+      "keywords": ["MYTH", "MYTHOLOGY", "GOD", "LEGEND"]
+    },
+    {
+      "id": "world-religions",
+      "title": "World Religions",
+      "summary": "Religions beyond Christianity.",
+      "keywords": ["ISLAM", "HINDU", "BUDDH", "JUDA", "RELIGION"]
+    },
+    {
+      "id": "other-religion",
+      "title": "General Religion & Myth",
+      "summary": "Religion and myth topics that do not fit elsewhere.",
+      "keywords": []
+    }
+  ],
+  "misc": [
+    {
+      "id": "misc",
+      "title": "Miscellaneous",
+      "summary": "Topics that do not fit elsewhere.",
+      "keywords": []
+    }
+  ]
+}

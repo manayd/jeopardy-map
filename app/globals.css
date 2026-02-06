@@ -20,7 +20,19 @@
 }
 
 body {
-  background: var(--background);
+  background: radial-gradient(circle at 20% 30%, #0f172a, #0b1324 40%),
+    radial-gradient(circle at 80% 0%, #0c122b, #090f1f 45%), #0a0f1d;
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), "Space Grotesk", "Soehne", system-ui,
+    -apple-system, sans-serif;
+  min-height: 100vh;
+}
+
+* {
+  scroll-behavior: smooth;
+}
+
+::selection {
+  background: #c7d2fe;
+  color: #0b1021;
 }
