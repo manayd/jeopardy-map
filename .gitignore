@@ -25,7 +25,14 @@
 *.pem
 
 # data
-/data/
+/data/*
+!/data/processed/
+/data/processed/*
+!/data/processed/topics.json
+!/data/processed/clues.json
+!/data/processed/meta.json
+!/data/processed/validation.json
+/data/processed/categories.json
 /jeopardy_clues.tsv
 
 # debug

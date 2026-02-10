@@ -1,0 +1,76 @@
+{
+  "meta": {
+    "source": "jeopardy_clues.tsv",
+    "total_clues": 529939,
+    "generated_at": "2026-02-06T21:18:42.602Z",
+    "max_category_samples": 20,
+    "max_topic_samples": 20,
+    "max_topic_children": 12,
+    "max_subtopic_samples": 20,
+    "max_subtopic_children": 10,
+    "max_cluster_samples": 10,
+    "max_cluster_children": 18,
+    "max_category_clues": 30,
+    "selected_categories": 1233
+  },
+  "errors": [],
+  "warnings": [],
+  "totals": {
+    "topics": 11,
+    "categories": 56328,
+    "root_children": 11,
+    "tree_categories": 1233
+  },
+  "top_categories": [
+    {
+      "id": "cat:science:b61263",
+      "title": "SCIENCE",
+      "count": 1601
+    },
+    {
+      "id": "cat:history:f6dc58",
+      "title": "HISTORY",
+      "count": 1500
+    },
+    {
+      "id": "cat:american-history:367468",
+      "title": "AMERICAN HISTORY",
+      "count": 1427
+    },
+    {
+      "id": "cat:literature:be4768",
+      "title": "LITERATURE",
+      "count": 1419
+    },
+    {
+      "id": "cat:potpourri:e8c852",
+      "title": "POTPOURRI",
+      "count": 1333
+    },
+    {
+      "id": "cat:sports:3beef3",
+      "title": "SPORTS",
+      "count": 1293
+    },
+    {
+      "id": "cat:business-industry:89b387",
+      "title": "BUSINESS & INDUSTRY",
+      "count": 1222
+    },
+    {
+      "id": "cat:world-geography:9117b7",
+      "title": "WORLD GEOGRAPHY",
+      "count": 1207
+    },
+    {
+      "id": "cat:word-origins:e7a568",
+      "title": "WORD ORIGINS",
+      "count": 1160
+    },
+    {
+      "id": "cat:world-history:6aeb07",
+      "title": "WORLD HISTORY",
+      "count": 1152
+    }
+  ]
+}
