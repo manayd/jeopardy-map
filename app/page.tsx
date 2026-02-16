@@ -37,25 +37,111 @@ type PositionedNode = {
   x: number;
   y: number;
   depth: number;
+  index?: number;
+  radius?: number;
 };
 
-function polarLayout(
+const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+
+const hashString = (value: string) => {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+};
+
+const mulberry32 = (seed: number) => {
+  let t = seed;
+  return () => {
+    t += 0x6d2b79f5;
+    let r = t;
+    r = Math.imul(r ^ (r >>> 15), r | 1);
+    r ^= r + Math.imul(r ^ (r >>> 7), r | 61);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+};
+
+function scatterLayout(
   children: Topic[],
   centerX: number,
   centerY: number,
-  radius: number,
+  width: number,
+  height: number,
+  seed: number,
 ): PositionedNode[] {
   if (!children.length) return [];
-  const angleStep = (2 * Math.PI) / children.length;
-  return children.map((topic, index) => {
-    const angle = -Math.PI / 2 + index * angleStep; // start at top
-    return {
-      topic,
-      x: centerX + radius * Math.cos(angle),
-      y: centerY + radius * Math.sin(angle),
-      depth: 1,
-    };
+  const margin = Math.max(140, Math.min(width, height) * 0.12);
+  const minRadius = Math.max(200, Math.min(width, height) * 0.2);
+  const maxX = Math.max(220, width / 2 - margin);
+  const maxY = Math.max(180, height / 2 - margin);
+  const baseRadius = 60;
+  const orbitPadding = 18;
+  const gap = 18;
+  const centerRadius = 86;
+  const points: PositionedNode[] = [];
+
+  children.forEach((topic, index) => {
+    const rng = mulberry32(seed + index * 101);
+    const nodeRadius = baseRadius + orbitPadding;
+    const centerExclusion = centerRadius + nodeRadius + gap;
+    let x = centerX;
+    let y = centerY;
+    let placed = false;
+
+    for (let attempt = 0; attempt < 64; attempt += 1) {
+      const rx = (rng() * 2 - 1) * maxX;
+      const ry = (rng() * 2 - 1) * maxY;
+      if (Math.hypot(rx, ry) < Math.max(minRadius, centerExclusion)) continue;
+      const candidate = { x: centerX + rx, y: centerY + ry };
+      const collision = points.some(
+        (p) => Math.hypot(p.x - candidate.x, p.y - candidate.y) < (p.radius ?? baseRadius) + nodeRadius + gap,
+      );
+      if (!collision) {
+        x = candidate.x;
+        y = candidate.y;
+        placed = true;
+        break;
+      }
+    }
+
+    if (!placed) {
+      const maxRadius = Math.max(minRadius + 60, Math.min(maxX, maxY));
+      for (let attempt = 0; attempt < 80; attempt += 1) {
+        const angle = (index + attempt * 0.5) * goldenAngle;
+        const radius = minRadius + (attempt / 80) * (maxRadius - minRadius);
+        const candidate = {
+          x: centerX + radius * Math.cos(angle),
+          y: centerY + radius * Math.sin(angle),
+        };
+        if (Math.hypot(candidate.x - centerX, candidate.y - centerY) < centerExclusion) {
+          continue;
+        }
+        const collision = points.some(
+          (p) =>
+            Math.hypot(p.x - candidate.x, p.y - candidate.y) <
+            (p.radius ?? baseRadius) + nodeRadius + gap,
+        );
+        if (!collision) {
+          x = candidate.x;
+          y = candidate.y;
+          placed = true;
+          break;
+        }
+      }
+    }
+
+    if (!placed) {
+      const angle = (index + 1) * goldenAngle;
+      x = centerX + centerExclusion * Math.cos(angle);
+      y = centerY + centerExclusion * Math.sin(angle);
+    }
+
+    points.push({ topic, x, y, depth: 1, index, radius: nodeRadius });
   });
+
+  return points;
 }
 
 function collectBreadcrumb(path: Topic[]) {
@@ -93,6 +179,49 @@ function formatDate(date?: string) {
   return date && date.trim().length ? date : "Date —";
 }
 
+function splitTitle(title: string): string[] {
+  if (title.length < 16) return [title];
+  const spaceIndex = title.indexOf(" ");
+  if (spaceIndex === -1) return [title];
+  return [title.slice(0, spaceIndex), title.slice(spaceIndex + 1)];
+}
+
+const nodePalette = [
+  "#f97316",
+  "#f43f5e",
+  "#06b6d4",
+  "#22c55e",
+  "#a855f7",
+  "#eab308",
+  "#3b82f6",
+  "#ec4899",
+  "#14b8a6",
+  "#f59e0b",
+  "#8b5cf6",
+  "#10b981",
+];
+
+function pickNodeColor(topic: Topic, index: number) {
+  const seed = hashString(topic.id);
+  return nodePalette[(seed + index) % nodePalette.length];
+}
+
+function textColorFor(hexColor: string) {
+  const hex = hexColor.replace("#", "");
+  if (hex.length !== 6) return "#0b1021";
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return luminance > 0.6 ? "#0b1021" : "#f8fafc";
+}
+
+function orbitDotCount(topic: Topic) {
+  const count = topic.childCount ?? topic.children?.length ?? 0;
+  if (!count) return 0;
+  return Math.min(10, Math.max(2, Math.round(Math.sqrt(count))));
+}
+
 export default function Home() {
   const [dataStatus, setDataStatus] = useState<"idle" | "loading" | "error">("idle");
   const [dataMode, setDataMode] = useState<"tree" | "lazy">("tree");
@@ -104,19 +233,32 @@ export default function Home() {
   const [detailCluesStatus, setDetailCluesStatus] = useState<"idle" | "loading" | "error">(
     "idle",
   );
+  const [zooming, setZooming] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const mapRef = useRef<HTMLDivElement | null>(null);
   const [dimensions, setDimensions] = useState({ w: 1120, h: 780 });
   const current = path[path.length - 1];
 
   const positioned = useMemo(() => {
-    const cx = dimensions.w / 2;
+    const sidebarInset = detailOpen ? 380 : 0;
+    const layoutWidth = Math.max(320, dimensions.w - sidebarInset);
+    const cx = sidebarInset + layoutWidth / 2;
     const cy = dimensions.h / 2;
-    const mapRadius = Math.max(220, Math.min(Math.min(dimensions.w, dimensions.h) * 0.28, 380));
+    const seed = hashString(current.id);
     const center: PositionedNode = { topic: current, x: cx, y: cy, depth: 0 };
-    const spokes = polarLayout(current.children ?? [], cx, cy, mapRadius);
+    const spokes = scatterLayout(
+      current.children ?? [],
+      cx,
+      cy,
+      layoutWidth,
+      dimensions.h,
+      seed,
+    );
     return [center, ...spokes];
-  }, [current, dimensions]);
+  }, [current, dimensions, detailOpen]);
+
+  const centerNode = positioned[0];
+  const childNodes = positioned.slice(1);
 
   const breadcrumbs = collectBreadcrumb(path);
 
@@ -190,6 +332,12 @@ export default function Home() {
       alive = false;
     };
   }, []);
+
+  useEffect(() => {
+    setZooming(true);
+    const timer = setTimeout(() => setZooming(false), 320);
+    return () => clearTimeout(timer);
+  }, [current.id]);
 
   useEffect(() => {
     if (!detailTopic) return;
@@ -283,9 +431,10 @@ export default function Home() {
               </div>
             </div>
             <div
-              className={`relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 ${
-                isFullscreen ? "h-[calc(100vh-4rem)]" : "h-[78vh] min-h-[620px]"
-              }`}
+              className={`relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 transition-transform duration-500 ease-out ${
+                zooming ? "scale-[1.03]" : "scale-100"
+              } ${isFullscreen ? "h-[calc(100vh-4rem)]" : "h-[78vh] min-h-[620px]"}`}
+              style={{ transformOrigin: "50% 50%" }}
             >
               <svg viewBox={`0 0 ${dimensions.w} ${dimensions.h}`} className="h-full w-full">
                 <defs>
@@ -298,10 +447,39 @@ export default function Home() {
                     <stop offset="100%" stopColor="#a5b4fc" />
                   </radialGradient>
                 </defs>
+                {centerNode &&
+                  childNodes.map((node) => {
+                    const dx = node.x - centerNode.x;
+                    const dy = node.y - centerNode.y;
+                    const distance = Math.max(Math.hypot(dx, dy), 1);
+                    const centerRadius = 86;
+                    const childRadius = 60;
+                    const startX = centerNode.x + (dx / distance) * centerRadius;
+                    const startY = centerNode.y + (dy / distance) * centerRadius;
+                    const endX = node.x - (dx / distance) * childRadius;
+                    const endY = node.y - (dy / distance) * childRadius;
+                    return (
+                      <line
+                        key={`link-${node.topic.id}`}
+                        x1={startX}
+                        y1={startY}
+                        x2={endX}
+                        y2={endY}
+                        stroke="rgba(255,255,255,0.35)"
+                        strokeWidth={1.4}
+                      />
+                    );
+                  })}
                 {positioned.map((node) => {
                   const isCenter = node.depth === 0;
                   const isHover = hoveredId === node.topic.id;
                   const centerClickable = isCenter && hasParent;
+                  const color = isCenter
+                    ? "url(#centerGradient)"
+                    : pickNodeColor(node.topic, node.index ?? 0);
+                  const nodeRadius = isCenter ? 86 : 60;
+                  const orbitCount = isCenter ? 0 : orbitDotCount(node.topic);
+                  const orbitRadius = nodeRadius + 14;
                   return (
                     <g
                       key={node.topic.id}
@@ -312,20 +490,33 @@ export default function Home() {
                         isCenter ? centerClickable && handleBack() : handleSelect(node.topic)
                       }
                       className={`${centerClickable || !isCenter ? "cursor-pointer" : "cursor-default"} transition duration-150`}
+                      style={{ transition: "transform 500ms ease" }}
                     >
                       <circle
-                        r={isCenter ? 86 : 60}
-                        fill={
-                          isCenter
-                            ? "url(#centerGradient)"
-                            : isHover
-                              ? "rgba(56, 189, 248, 0.9)"
-                              : "rgba(56, 189, 248, 0.7)"
-                        }
+                        r={nodeRadius}
+                        fill={color}
+                        fillOpacity={isCenter ? 1 : isHover ? 0.95 : 0.82}
                         stroke="rgba(255,255,255,0.6)"
                         strokeWidth={isCenter ? 4 : 2}
                         className={isHover && !isCenter ? "scale-105 shadow-lg" : ""}
                       />
+                      {!isCenter && orbitCount > 0 && (
+                        <g>
+                          {Array.from({ length: orbitCount }).map((_, idx) => {
+                            const angle = (2 * Math.PI * idx) / orbitCount;
+                            return (
+                              <circle
+                                key={`${node.topic.id}-orbit-${idx}`}
+                                cx={Math.cos(angle) * orbitRadius}
+                                cy={Math.sin(angle) * orbitRadius}
+                                r={3}
+                                fill={color}
+                                fillOpacity={0.9}
+                              />
+                            );
+                          })}
+                        </g>
+                      )}
                       {isCenter && (
                         <circle
                           r={82}
@@ -338,10 +529,24 @@ export default function Home() {
                         textAnchor="middle"
                         alignmentBaseline="middle"
                         className="font-semibold leading-tight"
-                        fill={isCenter ? "#0b1021" : "#0f172a"}
+                        fill={isCenter ? "#0b1021" : textColorFor(String(color))}
                         style={{ fontSize: isCenter ? "16px" : "13px" }}
                       >
-                        {node.topic.title}
+                        {splitTitle(node.topic.title).map((line, index, lines) => (
+                          <tspan
+                            key={`${node.topic.id}-${line}`}
+                            x="0"
+                            dy={
+                              lines.length === 1
+                                ? "0.35em"
+                                : index === 0
+                                  ? "-0.35em"
+                                  : "1.1em"
+                            }
+                          >
+                            {line}
+                          </tspan>
+                        ))}
                       </text>
                     </g>
                   );
@@ -423,36 +628,60 @@ export default function Home() {
                 </button>
               )}
 
-              {(dataStatus !== "idle" || dataMode === "lazy") && (
-                <div className="pointer-events-none absolute right-6 top-6 rounded-full border border-white/15 bg-slate-900/70 px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-indigo-100">
-                  {dataStatus === "loading"
-                    ? "Loading dataset"
-                    : dataMode === "lazy"
-                      ? "Lazy loading nodes"
-                      : "Using fallback data"}
-                </div>
-              )}
+              <div className="pointer-events-auto absolute right-6 top-6 z-10 flex flex-col items-end gap-2">
+                {(dataStatus !== "idle" || dataMode === "lazy") && (
+                  <div className="pointer-events-none rounded-full border border-white/15 bg-slate-900/70 px-4 py-2 text-[11px] uppercase tracking-[0.2em] text-indigo-100">
+                    {dataStatus === "loading"
+                      ? "Loading dataset"
+                      : dataMode === "lazy"
+                        ? "Lazy loading nodes"
+                        : "Using fallback data"}
+                  </div>
+                )}
+                <button
+                  onClick={isFullscreen ? exitFullscreen : enterFullscreen}
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-slate-900/70 text-indigo-50 shadow-lg shadow-indigo-900/40 backdrop-blur-sm transition hover:border-white/50 hover:bg-white/10"
+                  aria-label={isFullscreen ? "Exit full screen" : "Enter full screen"}
+                  title={isFullscreen ? "Exit full screen" : "Enter full screen"}
+                >
+                  {isFullscreen ? (
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      className="h-5 w-5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M9 3H5v4" />
+                      <path d="M15 3h4v4" />
+                      <path d="M9 21H5v-4" />
+                      <path d="M15 21h4v-4" />
+                    </svg>
+                  ) : (
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      className="h-5 w-5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M8 3H5v3" />
+                      <path d="M16 3h3v3" />
+                      <path d="M8 21H5v-3" />
+                      <path d="M16 21h3v-3" />
+                    </svg>
+                  )}
+                </button>
+              </div>
 
             </div>
           </section>
-          <div className="fixed bottom-6 right-6 z-30 flex flex-col gap-2">
-            {!isFullscreen && (
-              <button
-                onClick={enterFullscreen}
-                className="rounded-full border border-white/20 bg-slate-900/80 px-4 py-3 text-xs font-semibold text-indigo-50 shadow-lg shadow-indigo-900/40 backdrop-blur-sm transition hover:border-white/50 hover:bg-white/10"
-              >
-                Full Screen Map
-              </button>
-            )}
-            {isFullscreen && (
-              <button
-                onClick={exitFullscreen}
-                className="rounded-full border border-white/30 bg-indigo-600/90 px-4 py-3 text-xs font-semibold text-white shadow-lg shadow-indigo-900/50 backdrop-blur-sm transition hover:border-white/60 hover:bg-indigo-500/90"
-              >
-                Exit Full Screen
-              </button>
-            )}
-          </div>
         </main>
       </div>
     </div>
