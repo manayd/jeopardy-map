@@ -1,14 +1,14 @@
 {
   "source": "jeopardy_clues.tsv",
   "total_clues": 529939,
-  "generated_at": "2026-02-06T21:18:42.602Z",
+  "generated_at": "2026-03-27T03:32:53.086Z",
   "max_category_samples": 20,
   "max_topic_samples": 20,
-  "max_topic_children": 12,
+  "max_topic_children": 15,
   "max_subtopic_samples": 20,
-  "max_subtopic_children": 10,
+  "max_subtopic_children": 15,
   "max_cluster_samples": 10,
-  "max_cluster_children": 18,
+  "max_cluster_children": 20,
   "max_category_clues": 30,
-  "selected_categories": 1233
+  "selected_categories": 1854
 }

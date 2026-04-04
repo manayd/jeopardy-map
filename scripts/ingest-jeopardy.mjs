@@ -7,11 +7,11 @@ const inputPath = process.argv[2] ?? "jeopardy_clues.tsv";
 const outDir = process.argv[3] ?? "data/processed";
 const maxSamplesPerCategory = Number(process.env.MAX_CATEGORY_SAMPLES ?? 20);
 const maxSamplesPerTopic = Number(process.env.MAX_TOPIC_SAMPLES ?? 20);
-const maxChildrenPerTopic = Number(process.env.MAX_TOPIC_CHILDREN ?? 12);
+const maxChildrenPerTopic = Number(process.env.MAX_TOPIC_CHILDREN ?? 15);
 const maxSamplesPerSubtopic = Number(process.env.MAX_SUBTOPIC_SAMPLES ?? 20);
-const maxChildrenPerSubtopic = Number(process.env.MAX_SUBTOPIC_CHILDREN ?? 10);
+const maxChildrenPerSubtopic = Number(process.env.MAX_SUBTOPIC_CHILDREN ?? 15);
 const maxSamplesPerCluster = Number(process.env.MAX_CLUSTER_SAMPLES ?? 10);
-const maxChildrenPerCluster = Number(process.env.MAX_CLUSTER_CHILDREN ?? 18);
+const maxChildrenPerCluster = Number(process.env.MAX_CLUSTER_CHILDREN ?? 20);
 const maxCluesPerCategory = Number(process.env.MAX_CATEGORY_CLUES ?? 30);
 
 const rulesPath = "config/topic-rules.json";
@@ -19,10 +19,23 @@ const topicRules = JSON.parse(fs.readFileSync(rulesPath, "utf8"));
 const subtopicRules = JSON.parse(fs.readFileSync("config/subtopic-rules.json", "utf8"));
 const clusterRules = JSON.parse(fs.readFileSync("config/cluster-rules.json", "utf8"));
 
+// Load category overrides from LLM classification (if available)
+const overridesPath = "config/category-overrides.json";
+const categoryOverrides = fs.existsSync(overridesPath)
+  ? JSON.parse(fs.readFileSync(overridesPath, "utf8"))
+  : {};
+const overrideCount = Object.keys(categoryOverrides).length;
+if (overrideCount > 0) {
+  console.log(`Loaded ${overrideCount} category overrides from ${overridesPath}`);
+}
+
+// Build a lookup from topic id to topic rule for overrides
+const topicRuleById = new Map(topicRules.map((rule) => [rule.id, rule]));
+
 const miscRule = topicRules.find((rule) => rule.id === "misc") ?? {
   id: "misc",
-  title: "Miscellaneous",
-  summary: "Topics that do not fit elsewhere.",
+  title: "Unclassified",
+  summary: "Categories awaiting classification.",
   keywords: [],
 };
 
@@ -47,6 +60,14 @@ const categoryId = (value) => {
 
 const matchTopic = (category) => {
   const haystack = normalize(category).toUpperCase();
+
+  // Check LLM-generated overrides first
+  const overrideTopicId = categoryOverrides[haystack];
+  if (overrideTopicId) {
+    const overrideRule = topicRuleById.get(overrideTopicId);
+    if (overrideRule) return overrideRule;
+  }
+
   for (const rule of topicRules) {
     if (rule.id === "misc") continue;
     if (rule.keywords.some((keyword) => haystack.includes(keyword))) {

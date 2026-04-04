@@ -4,6 +4,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { SiteNav } from "@/components/site-nav";
 
 type Clue = {
   prompt: string;
@@ -41,7 +43,15 @@ type PositionedNode = {
   radius?: number;
 };
 
-const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+type FullscreenCapableElement = HTMLDivElement & {
+  webkitRequestFullscreen?: () => Promise<void> | void;
+  msRequestFullscreen?: () => Promise<void> | void;
+};
+
+type FullscreenCapableDocument = Document & {
+  webkitExitFullscreen?: () => Promise<void> | void;
+  msExitFullscreen?: () => Promise<void> | void;
+};
 
 const hashString = (value: string) => {
   let hash = 2166136261;
@@ -52,94 +62,87 @@ const hashString = (value: string) => {
   return hash >>> 0;
 };
 
-const mulberry32 = (seed: number) => {
-  let t = seed;
-  return () => {
-    t += 0x6d2b79f5;
-    let r = t;
-    r = Math.imul(r ^ (r >>> 15), r | 1);
-    r ^= r + Math.imul(r ^ (r >>> 7), r | 61);
-    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
-  };
-};
+/** Compute dynamic node radius based on child count and available space. */
+function computeNodeRadius(childCount: number, width: number, height: number): number {
+  const minDim = Math.min(width, height);
+  if (childCount <= 6) return Math.min(60, minDim * 0.07);
+  if (childCount <= 12) return Math.min(50, minDim * 0.06);
+  if (childCount <= 20) return Math.min(40, minDim * 0.048);
+  return Math.min(34, minDim * 0.04);
+}
 
-function scatterLayout(
+function computeCenterRadius(childCount: number, width: number, height: number): number {
+  const minDim = Math.min(width, height);
+  if (childCount <= 6) return Math.min(86, minDim * 0.1);
+  if (childCount <= 12) return Math.min(72, minDim * 0.085);
+  if (childCount <= 20) return Math.min(60, minDim * 0.07);
+  return Math.min(52, minDim * 0.06);
+}
+
+/**
+ * Radial layout: places children in concentric rings around center.
+ * Dynamically sizes nodes and rings based on child count & available space.
+ */
+function radialLayout(
   children: Topic[],
   centerX: number,
   centerY: number,
   width: number,
   height: number,
-  seed: number,
 ): PositionedNode[] {
   if (!children.length) return [];
-  const margin = Math.max(140, Math.min(width, height) * 0.12);
-  const minRadius = Math.max(200, Math.min(width, height) * 0.2);
-  const maxX = Math.max(220, width / 2 - margin);
-  const maxY = Math.max(180, height / 2 - margin);
-  const baseRadius = 60;
-  const orbitPadding = 18;
-  const gap = 18;
-  const centerRadius = 86;
+
+  const n = children.length;
+  const nodeRadius = computeNodeRadius(n, width, height);
+  const cRadius = computeCenterRadius(n, width, height);
+  const gap = Math.max(8, nodeRadius * 0.3);
+  const minRingRadius = cRadius + nodeRadius + gap + 20;
+
+  // Determine how many rings we need and how many nodes per ring
+  const rings: number[] = [];
+  let remaining = n;
+
+  // First ring: fit as many as possible with comfortable spacing
+  const circumference = (r: number) => 2 * Math.PI * r;
+  const nodeSpan = nodeRadius * 2 + gap;
+
+  let ringRadius = minRingRadius;
+  while (remaining > 0) {
+    const canFit = Math.max(1, Math.floor(circumference(ringRadius) / nodeSpan));
+    const count = Math.min(remaining, canFit);
+    rings.push(count);
+    remaining -= count;
+    ringRadius += nodeRadius * 2 + gap + 12;
+  }
+
   const points: PositionedNode[] = [];
+  let childIdx = 0;
+  let currentRingRadius = minRingRadius;
 
-  children.forEach((topic, index) => {
-    const rng = mulberry32(seed + index * 101);
-    const nodeRadius = baseRadius + orbitPadding;
-    const centerExclusion = centerRadius + nodeRadius + gap;
-    let x = centerX;
-    let y = centerY;
-    let placed = false;
+  for (let ring = 0; ring < rings.length; ring++) {
+    const countInRing = rings[ring];
+    // Offset odd rings by half a step for visual variety
+    const angleOffset = ring % 2 === 0 ? 0 : Math.PI / countInRing;
 
-    for (let attempt = 0; attempt < 64; attempt += 1) {
-      const rx = (rng() * 2 - 1) * maxX;
-      const ry = (rng() * 2 - 1) * maxY;
-      if (Math.hypot(rx, ry) < Math.max(minRadius, centerExclusion)) continue;
-      const candidate = { x: centerX + rx, y: centerY + ry };
-      const collision = points.some(
-        (p) => Math.hypot(p.x - candidate.x, p.y - candidate.y) < (p.radius ?? baseRadius) + nodeRadius + gap,
-      );
-      if (!collision) {
-        x = candidate.x;
-        y = candidate.y;
-        placed = true;
-        break;
-      }
+    for (let i = 0; i < countInRing; i++) {
+      const angle = angleOffset + (2 * Math.PI * i) / countInRing - Math.PI / 2;
+      // Elliptical scaling to use the full rectangular viewport
+      const rx = Math.min(currentRingRadius, width / 2 - nodeRadius - 20);
+      const ry = Math.min(currentRingRadius, height / 2 - nodeRadius - 20);
+      const x = centerX + rx * Math.cos(angle);
+      const y = centerY + ry * Math.sin(angle);
+      points.push({
+        topic: children[childIdx],
+        x,
+        y,
+        depth: 1,
+        index: childIdx,
+        radius: nodeRadius,
+      });
+      childIdx++;
     }
-
-    if (!placed) {
-      const maxRadius = Math.max(minRadius + 60, Math.min(maxX, maxY));
-      for (let attempt = 0; attempt < 80; attempt += 1) {
-        const angle = (index + attempt * 0.5) * goldenAngle;
-        const radius = minRadius + (attempt / 80) * (maxRadius - minRadius);
-        const candidate = {
-          x: centerX + radius * Math.cos(angle),
-          y: centerY + radius * Math.sin(angle),
-        };
-        if (Math.hypot(candidate.x - centerX, candidate.y - centerY) < centerExclusion) {
-          continue;
-        }
-        const collision = points.some(
-          (p) =>
-            Math.hypot(p.x - candidate.x, p.y - candidate.y) <
-            (p.radius ?? baseRadius) + nodeRadius + gap,
-        );
-        if (!collision) {
-          x = candidate.x;
-          y = candidate.y;
-          placed = true;
-          break;
-        }
-      }
-    }
-
-    if (!placed) {
-      const angle = (index + 1) * goldenAngle;
-      x = centerX + centerExclusion * Math.cos(angle);
-      y = centerY + centerExclusion * Math.sin(angle);
-    }
-
-    points.push({ topic, x, y, depth: 1, index, radius: nodeRadius });
-  });
+    currentRingRadius += nodeRadius * 2 + gap + 12;
+  }
 
   return points;
 }
@@ -236,36 +239,36 @@ export default function Home() {
   const [zooming, setZooming] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const mapRef = useRef<HTMLDivElement | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
   const [dimensions, setDimensions] = useState({ w: 1120, h: 780 });
   const current = path[path.length - 1];
 
+  // Pan & zoom state for the SVG viewBox
+  const [viewBox, setViewBox] = useState({ x: 0, y: 0, w: 1120, h: 780 });
+  const isPanning = useRef(false);
+  const panStart = useRef({ x: 0, y: 0, vx: 0, vy: 0 });
+
   const positioned = useMemo(() => {
-    const sidebarInset = detailOpen ? 380 : 0;
-    const layoutWidth = Math.max(320, dimensions.w - sidebarInset);
-    const cx = sidebarInset + layoutWidth / 2;
+    const layoutWidth = Math.max(320, dimensions.w);
+    const cx = layoutWidth / 2;
     const cy = dimensions.h / 2;
-    const seed = hashString(current.id);
-    const center: PositionedNode = { topic: current, x: cx, y: cy, depth: 0 };
-    const spokes = scatterLayout(
+    const childCount = current.children?.length ?? 0;
+    const cRadius = computeCenterRadius(childCount, layoutWidth, dimensions.h);
+    const center: PositionedNode = { topic: current, x: cx, y: cy, depth: 0, radius: cRadius };
+    const spokes = radialLayout(
       current.children ?? [],
       cx,
       cy,
       layoutWidth,
       dimensions.h,
-      seed,
     );
     return [center, ...spokes];
-  }, [current, dimensions, detailOpen]);
+  }, [current, dimensions]);
 
   const centerNode = positioned[0];
   const childNodes = positioned.slice(1);
 
   const breadcrumbs = collectBreadcrumb(path);
-
-  const activeTopic =
-    hoveredId == null
-      ? current
-      : positioned.find((p) => p.topic.id === hoveredId)?.topic ?? current;
 
   const hasParent = path.length > 1;
 
@@ -289,7 +292,7 @@ export default function Home() {
           setHoveredId(null);
           return;
         }
-      } catch (error) {
+      } catch {
         // fallback to local topic
       }
     }
@@ -322,7 +325,7 @@ export default function Home() {
         setDetailTopic(data);
         setDataStatus("idle");
         setDataMode(inferDataMode(data));
-      } catch (error) {
+      } catch {
         if (!alive) return;
         setDataStatus("error");
       }
@@ -339,19 +342,76 @@ export default function Home() {
     return () => clearTimeout(timer);
   }, [current.id]);
 
+  // Reset viewBox when navigating or resizing
   useEffect(() => {
-    if (!detailTopic) return;
+    setViewBox({ x: 0, y: 0, w: dimensions.w, h: dimensions.h });
+  }, [current.id, dimensions]);
+
+  // Wheel zoom — attached as non-passive so preventDefault works
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const zoomFactor = e.deltaY > 0 ? 1.1 : 0.9;
+      const rect = svg.getBoundingClientRect();
+      const mx = (e.clientX - rect.left) / rect.width;
+      const my = (e.clientY - rect.top) / rect.height;
+      setViewBox((vb) => {
+        const newW = Math.max(dimensions.w * 0.2, Math.min(dimensions.w * 3, vb.w * zoomFactor));
+        const newH = Math.max(dimensions.h * 0.2, Math.min(dimensions.h * 3, vb.h * zoomFactor));
+        const newX = vb.x + (vb.w - newW) * mx;
+        const newY = vb.y + (vb.h - newH) * my;
+        return { x: newX, y: newY, w: newW, h: newH };
+      });
+    };
+    svg.addEventListener("wheel", onWheel, { passive: false });
+    return () => svg.removeEventListener("wheel", onWheel);
+  }, [dimensions]);
+
+  // Pan handlers
+  const handlePanStart = (e: React.MouseEvent<SVGSVGElement>) => {
+    // Only start pan on middle-click or when clicking the background (not a node)
+    if (e.button === 1 || (e.target as Element).tagName === "svg") {
+      isPanning.current = true;
+      panStart.current = { x: e.clientX, y: e.clientY, vx: viewBox.x, vy: viewBox.y };
+      e.preventDefault();
+    }
+  };
+
+  const handlePanMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!isPanning.current || !svgRef.current) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const dx = ((e.clientX - panStart.current.x) / rect.width) * viewBox.w;
+    const dy = ((e.clientY - panStart.current.y) / rect.height) * viewBox.h;
+    setViewBox((vb) => ({ ...vb, x: panStart.current.vx - dx, y: panStart.current.vy - dy }));
+  };
+
+  const handlePanEnd = () => {
+    isPanning.current = false;
+  };
+
+  const handleResetZoom = () => {
+    setViewBox({ x: 0, y: 0, w: dimensions.w, h: dimensions.h });
+  };
+
+  const isZoomed = Math.abs(viewBox.w - dimensions.w) > 1 || Math.abs(viewBox.h - dimensions.h) > 1 || Math.abs(viewBox.x) > 1 || Math.abs(viewBox.y) > 1;
+
+  const detailTopicId = detailTopic?.id;
+
+  useEffect(() => {
+    if (!detailTopicId) return;
     let alive = true;
     const loadClues = async () => {
       setDetailCluesStatus("loading");
       try {
-        const response = await fetch(`/api/topics/${detailTopic.id}/clues?limit=6`);
+        const response = await fetch(`/api/topics/${detailTopicId}/clues?limit=6`);
         if (!response.ok) throw new Error("Failed to load clues");
         const data = (await response.json()) as { clues?: Clue[] };
         if (!alive) return;
         setDetailClues(data.clues ?? []);
         setDetailCluesStatus("idle");
-      } catch (error) {
+      } catch {
         if (!alive) return;
         setDetailClues([]);
         setDetailCluesStatus("error");
@@ -361,7 +421,7 @@ export default function Home() {
     return () => {
       alive = false;
     };
-  }, [detailTopic?.id]);
+  }, [detailTopicId]);
 
   useEffect(() => {
     const handler = () => {
@@ -388,12 +448,12 @@ export default function Home() {
 
   const enterFullscreen = () => {
     if (!mapRef.current) return;
-    const el = mapRef.current as any;
+    const el = mapRef.current as FullscreenCapableElement;
     (el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen)?.call(el);
   };
 
   const exitFullscreen = () => {
-    const doc: any = document;
+    const doc = document as FullscreenCapableDocument;
     (document.exitFullscreen || doc.webkitExitFullscreen || doc.msExitFullscreen)?.call(document);
   };
 
@@ -401,33 +461,144 @@ export default function Home() {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-slate-50">
       <div className="relative overflow-hidden">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(120,119,198,0.15),transparent_35%),radial-gradient(circle_at_80%_0%,rgba(255,255,255,0.12),transparent_25%),radial-gradient(circle_at_50%_80%,rgba(16,185,129,0.12),transparent_35%)]" />
-        <nav className="relative mx-auto flex max-w-[94vw] items-center justify-between px-6 pt-6 lg:px-10">
-          <div className="flex items-center gap-3 text-sm font-semibold uppercase tracking-[0.25em] text-indigo-100">
-            <span className="h-3 w-3 rounded-full bg-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.6)]" />
-            Jeopardy Mind Map
-          </div>
-          <a
-            href="/about"
-            className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-indigo-50 transition hover:border-white/40 hover:bg-white/10"
-          >
-            About
-          </a>
-        </nav>
+        <SiteNav current="map" />
 
         <main className="relative mx-auto flex max-w-[94vw] flex-col gap-6 px-0 pb-16 pt-6 lg:flex-row lg:items-stretch lg:gap-6 lg:px-10">
+          {/* Detail sidebar — sits beside the canvas, not overlapping */}
+          {detailOpen && detailTopic && (
+            <aside className="hidden lg:flex w-[340px] shrink-0 flex-col rounded-3xl border border-white/5 bg-white/5 p-5 shadow-2xl shadow-black/30 backdrop-blur-xl">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.22em] text-indigo-200">
+                    Focus
+                  </p>
+                  <h2 className="mt-1 text-xl font-semibold text-white">{detailTopic.title}</h2>
+                </div>
+                <button
+                  onClick={() => setDetailOpen(false)}
+                  className="rounded-full border border-white/15 px-3 py-1 text-xs font-semibold text-indigo-50 transition hover:border-white/40 hover:bg-white/10"
+                >
+                  Close
+                </button>
+              </div>
+              <p className="pt-3 text-sm leading-relaxed text-slate-200/90">
+                {detailTopic.summary}
+              </p>
+              <div className="mt-4 flex-1 overflow-hidden flex flex-col">
+                <div className="text-[11px] uppercase tracking-[0.22em] text-indigo-200/80 mb-3">
+                  {detailCluesStatus === "loading"
+                    ? "Fetching clues"
+                    : detailCluesStatus === "error"
+                      ? "Showing sample clues"
+                      : "Clues"}
+                </div>
+                <div className="flex-1 overflow-y-auto pr-1">
+                  <div className="grid gap-3">
+                    {(detailClues.length
+                      ? detailClues
+                      : detailTopic.clueSamples.length
+                        ? detailTopic.clueSamples
+                        : [fallbackClue]
+                    ).map((clue) => (
+                      <div
+                        key={`${clue.prompt}-${clue.answer}`}
+                        className="rounded-xl bg-slate-900/60 p-4 text-sm ring-1 ring-white/5"
+                      >
+                        <p className="text-slate-50">“{clue.prompt}”</p>
+                        <p className="mt-2 text-emerald-200">{clue.answer}</p>
+                        <div className="mt-3 text-[11px] uppercase tracking-[0.2em] text-indigo-200/80">
+                          {formatRound(clue.round)} · {formatValue(clue)}
+                          {clue.daily_double_value && clue.daily_double_value > 0
+                            ? " · Daily Double"
+                            : ""}
+                          {" · "}
+                          {formatDate(clue.air_date)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </aside>
+          )}
           <section
             ref={mapRef}
             className={`relative flex-1 rounded-3xl border border-white/5 bg-white/5 p-4 shadow-2xl shadow-black/30 transition-all duration-200 ${
               isFullscreen ? "h-screen w-screen" : ""
             }`}
           >
-            <div className="mb-4 flex items-center justify-between px-2">
-              <div className="text-sm font-medium text-indigo-100/90">
-                {current.children?.length ? "Pick a branch to zoom in • Tap nodes to change focus • Center node goes up a level" : "Leaf topic • Use the breadcrumb trail to go up"}
+            <div className="mb-4 rounded-2xl border border-emerald-300/15 bg-[linear-gradient(135deg,rgba(16,185,129,0.14),rgba(15,23,42,0.65))] p-4">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.24em] text-emerald-100/90">
+                    Memorization Practice
+                  </p>
+                  <h2 className="mt-2 text-xl font-semibold text-white">
+                    Switch from exploration to deliberate recall practice.
+                  </h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-200/85">
+                    Open the new practice area to work through world capitals now, with
+                    more decks like state capitals and presidents queued behind it.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <Link
+                    href="/practice"
+                    className="rounded-full bg-emerald-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-200"
+                  >
+                    Open Practice
+                  </Link>
+                  <Link
+                    href="/practice/world-capitals"
+                    className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-indigo-50 transition hover:border-white/40 hover:bg-white/10"
+                  >
+                    Start World Capitals
+                  </Link>
+                </div>
               </div>
-              <div className="flex items-center gap-2 text-xs text-slate-200/70">
-                <span className="h-2 w-2 rounded-full bg-white" /> Current focus
-                <span className="h-2 w-2 rounded-full bg-blue-300" /> Children
+            </div>
+            {/* Breadcrumb trail */}
+            {breadcrumbs.length > 1 && (
+              <div className="mb-3 flex items-center gap-1 px-2 overflow-x-auto scrollbar-none">
+                {breadcrumbs.map((crumb, idx) => {
+                  const isLast = idx === breadcrumbs.length - 1;
+                  return (
+                    <span key={crumb.id} className="flex items-center gap-1 shrink-0">
+                      {idx > 0 && (
+                        <svg className="h-3 w-3 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M9 18l6-6-6-6" />
+                        </svg>
+                      )}
+                      <button
+                        onClick={() => {
+                          if (!isLast) {
+                            setPath((prev) => prev.slice(0, idx + 1));
+                            setHoveredId(null);
+                            setDetailTopic(path[idx]);
+                          }
+                        }}
+                        className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                          isLast
+                            ? "bg-indigo-500/30 text-indigo-100 cursor-default ring-1 ring-indigo-400/30"
+                            : "text-slate-300 hover:bg-white/10 hover:text-white cursor-pointer"
+                        }`}
+                      >
+                        {crumb.title}
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+            <div className="mb-3 flex items-center justify-between px-2">
+              <div className="text-xs text-indigo-100/70">
+                {current.children?.length
+                  ? `${current.children.length} topics • Click to explore • Center goes back`
+                  : "Leaf topic • Use breadcrumbs to navigate up"}
+              </div>
+              <div className="flex items-center gap-3 text-[11px] text-slate-300/60">
+                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-indigo-200" /> Focus</span>
+                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-blue-300" /> Children</span>
               </div>
             </div>
             <div
@@ -436,7 +607,15 @@ export default function Home() {
               } ${isFullscreen ? "h-[calc(100vh-4rem)]" : "h-[78vh] min-h-[620px]"}`}
               style={{ transformOrigin: "50% 50%" }}
             >
-              <svg viewBox={`0 0 ${dimensions.w} ${dimensions.h}`} className="h-full w-full">
+              <svg
+                ref={svgRef}
+                viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`}
+                className="h-full w-full"
+                onMouseDown={handlePanStart}
+                onMouseMove={handlePanMove}
+                onMouseUp={handlePanEnd}
+                onMouseLeave={handlePanEnd}
+              >
                 <defs>
                   <linearGradient id="linkGradient" x1="0%" y1="0%" x2="100%" y2="0%">
                     <stop offset="0%" stopColor="#c4d5ff" />
@@ -452,12 +631,12 @@ export default function Home() {
                     const dx = node.x - centerNode.x;
                     const dy = node.y - centerNode.y;
                     const distance = Math.max(Math.hypot(dx, dy), 1);
-                    const centerRadius = 86;
-                    const childRadius = 60;
-                    const startX = centerNode.x + (dx / distance) * centerRadius;
-                    const startY = centerNode.y + (dy / distance) * centerRadius;
-                    const endX = node.x - (dx / distance) * childRadius;
-                    const endY = node.y - (dy / distance) * childRadius;
+                    const cR = centerNode.radius ?? 86;
+                    const nR = node.radius ?? 60;
+                    const startX = centerNode.x + (dx / distance) * cR;
+                    const startY = centerNode.y + (dy / distance) * cR;
+                    const endX = node.x - (dx / distance) * nR;
+                    const endY = node.y - (dy / distance) * nR;
                     return (
                       <line
                         key={`link-${node.topic.id}`}
@@ -465,8 +644,8 @@ export default function Home() {
                         y1={startY}
                         x2={endX}
                         y2={endY}
-                        stroke="rgba(255,255,255,0.35)"
-                        strokeWidth={1.4}
+                        stroke="rgba(255,255,255,0.18)"
+                        strokeWidth={1.2}
                       />
                     );
                   })}
@@ -477,9 +656,13 @@ export default function Home() {
                   const color = isCenter
                     ? "url(#centerGradient)"
                     : pickNodeColor(node.topic, node.index ?? 0);
-                  const nodeRadius = isCenter ? 86 : 60;
+                  const nodeRadius = node.radius ?? (isCenter ? 86 : 60);
+                  const fontSize = isCenter
+                    ? `${Math.max(12, Math.min(16, nodeRadius * 0.2))}px`
+                    : `${Math.max(9, Math.min(13, nodeRadius * 0.24))}px`;
                   const orbitCount = isCenter ? 0 : orbitDotCount(node.topic);
-                  const orbitRadius = nodeRadius + 14;
+                  const orbitRadius = nodeRadius + Math.max(8, nodeRadius * 0.2);
+                  const orbitDotR = Math.max(2, Math.min(3, nodeRadius * 0.05));
                   return (
                     <g
                       key={node.topic.id}
@@ -489,16 +672,16 @@ export default function Home() {
                       onClick={() =>
                         isCenter ? centerClickable && handleBack() : handleSelect(node.topic)
                       }
-                      className={`${centerClickable || !isCenter ? "cursor-pointer" : "cursor-default"} transition duration-150`}
-                      style={{ transition: "transform 500ms ease" }}
+                      className={`${centerClickable || !isCenter ? "cursor-pointer" : "cursor-default"}`}
+                      style={{ transition: "transform 300ms ease, opacity 300ms ease" }}
                     >
                       <circle
                         r={nodeRadius}
                         fill={color}
                         fillOpacity={isCenter ? 1 : isHover ? 0.95 : 0.82}
-                        stroke="rgba(255,255,255,0.6)"
-                        strokeWidth={isCenter ? 4 : 2}
-                        className={isHover && !isCenter ? "scale-105 shadow-lg" : ""}
+                        stroke={isHover && !isCenter ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.5)"}
+                        strokeWidth={isCenter ? 3 : isHover ? 2.5 : 1.5}
+                        style={{ transition: "r 300ms ease, fill-opacity 200ms ease, stroke-width 200ms ease" }}
                       />
                       {!isCenter && orbitCount > 0 && (
                         <g>
@@ -509,7 +692,7 @@ export default function Home() {
                                 key={`${node.topic.id}-orbit-${idx}`}
                                 cx={Math.cos(angle) * orbitRadius}
                                 cy={Math.sin(angle) * orbitRadius}
-                                r={3}
+                                r={orbitDotR}
                                 fill={color}
                                 fillOpacity={0.9}
                               />
@@ -519,18 +702,18 @@ export default function Home() {
                       )}
                       {isCenter && (
                         <circle
-                          r={82}
+                          r={nodeRadius - 4}
                           fill="none"
                           stroke="rgba(255,255,255,0.15)"
-                          strokeDasharray="6 8"
+                          strokeDasharray="5 7"
                         />
                       )}
                       <text
                         textAnchor="middle"
                         alignmentBaseline="middle"
-                        className="font-semibold leading-tight"
+                        className="font-semibold leading-tight select-none"
                         fill={isCenter ? "#0b1021" : textColorFor(String(color))}
-                        style={{ fontSize: isCenter ? "16px" : "13px" }}
+                        style={{ fontSize }}
                       >
                         {splitTitle(node.topic.title).map((line, index, lines) => (
                           <tspan
@@ -561,14 +744,49 @@ export default function Home() {
                 </div>
               )}
 
+              {/* Hover tooltip */}
+              {hoveredId && hoveredId !== current.id && (() => {
+                const hoveredNode = positioned.find((p) => p.topic.id === hoveredId);
+                if (!hoveredNode) return null;
+                const t = hoveredNode.topic;
+                const childCount = t.childCount ?? t.children?.length ?? 0;
+                // Position tooltip: prefer above the node, flip below if near top
+                const tooltipWidth = 220;
+                const nodeR = hoveredNode.radius ?? 60;
+                const nearTop = hoveredNode.y < dimensions.h * 0.3;
+                const tipX = Math.max(tooltipWidth / 2 + 8, Math.min(hoveredNode.x, dimensions.w - tooltipWidth / 2 - 8));
+                const tipY = nearTop ? hoveredNode.y + nodeR + 16 : hoveredNode.y - nodeR - 16;
+                return (
+                  <div
+                    className="pointer-events-none absolute z-20"
+                    style={{
+                      left: `${(tipX / dimensions.w) * 100}%`,
+                      top: `${(tipY / dimensions.h) * 100}%`,
+                      transform: `translate(-50%, ${nearTop ? "0" : "-100%"})`,
+                    }}
+                  >
+                    <div className="rounded-xl bg-slate-900/90 backdrop-blur-md px-4 py-3 ring-1 ring-white/10 shadow-xl max-w-[220px]">
+                      <p className="text-sm font-semibold text-white">{t.title}</p>
+                      {t.summary && (
+                        <p className="mt-1 text-xs leading-relaxed text-slate-300 line-clamp-2">{t.summary}</p>
+                      )}
+                      {childCount > 0 && (
+                        <p className="mt-2 text-[11px] text-indigo-300">{childCount} subtopic{childCount !== 1 ? "s" : ""} · Click to explore</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Overlay detail panel — visible on mobile, or in fullscreen on desktop */}
               {detailOpen && detailTopic && (
-                <div className="pointer-events-auto absolute left-0 top-0 h-full w-[360px] max-w-[85vw] -translate-x-2 rounded-2xl bg-white/8 backdrop-blur-xl ring-1 ring-white/10 shadow-2xl shadow-indigo-900/40 transition">
+                <div className={`pointer-events-auto absolute left-0 top-0 h-full w-[340px] max-w-[85vw] rounded-2xl bg-slate-900/95 backdrop-blur-xl ring-1 ring-white/10 shadow-2xl shadow-indigo-900/40 transition overflow-y-auto ${isFullscreen ? "" : "lg:hidden"}`}>
                   <div className="flex items-start justify-between px-5 pt-5">
                     <div>
                       <p className="text-[11px] uppercase tracking-[0.22em] text-indigo-200">
                         Focus
                       </p>
-                      <h2 className="mt-1 text-2xl font-semibold text-white">{detailTopic.title}</h2>
+                      <h2 className="mt-1 text-xl font-semibold text-white">{detailTopic.title}</h2>
                     </div>
                     <button
                       onClick={() => setDetailOpen(false)}
@@ -588,31 +806,29 @@ export default function Home() {
                           ? "Showing sample clues"
                           : "Clues"}
                     </div>
-                    <div className="max-h-[calc(100vh-340px)] overflow-y-auto pr-1">
-                      <div className="grid gap-3">
-                        {(detailClues.length
-                          ? detailClues
-                          : detailTopic.clueSamples.length
-                            ? detailTopic.clueSamples
-                            : [fallbackClue]
-                        ).map((clue) => (
-                          <div
-                            key={`${clue.prompt}-${clue.answer}`}
-                            className="rounded-xl bg-slate-900/60 p-4 text-sm ring-1 ring-white/5"
-                          >
-                            <p className="text-slate-50">“{clue.prompt}”</p>
-                            <p className="mt-2 text-emerald-200">{clue.answer}</p>
-                            <div className="mt-3 text-[11px] uppercase tracking-[0.2em] text-indigo-200/80">
-                              {formatRound(clue.round)} · {formatValue(clue)}
-                              {clue.daily_double_value && clue.daily_double_value > 0
-                                ? " · Daily Double"
-                                : ""}
-                              {" · "}
-                              {formatDate(clue.air_date)}
-                            </div>
+                    <div className="grid gap-3">
+                      {(detailClues.length
+                        ? detailClues
+                        : detailTopic.clueSamples.length
+                          ? detailTopic.clueSamples
+                          : [fallbackClue]
+                      ).map((clue) => (
+                        <div
+                          key={`${clue.prompt}-${clue.answer}`}
+                          className="rounded-xl bg-slate-900/60 p-4 text-sm ring-1 ring-white/5"
+                        >
+                          <p className="text-slate-50">“{clue.prompt}”</p>
+                          <p className="mt-2 text-emerald-200">{clue.answer}</p>
+                          <div className="mt-3 text-[11px] uppercase tracking-[0.2em] text-indigo-200/80">
+                            {formatRound(clue.round)} · {formatValue(clue)}
+                            {clue.daily_double_value && clue.daily_double_value > 0
+                              ? " · Daily Double"
+                              : ""}
+                            {" · "}
+                            {formatDate(clue.air_date)}
                           </div>
-                        ))}
-                      </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -621,7 +837,7 @@ export default function Home() {
               {!detailOpen && detailTopic && (
                 <button
                   onClick={() => setDetailOpen(true)}
-                  className="pointer-events-auto absolute left-0 top-10 z-10 flex h-12 w-10 items-center justify-center rounded-r-xl bg-indigo-500 text-[10px] font-semibold uppercase tracking-[0.18em] text-white shadow-lg shadow-indigo-900/40 transition hover:bg-indigo-400"
+                  className={`pointer-events-auto absolute left-0 top-10 z-10 flex h-12 w-10 items-center justify-center rounded-r-xl bg-indigo-500 text-[10px] font-semibold uppercase tracking-[0.18em] text-white shadow-lg shadow-indigo-900/40 transition hover:bg-indigo-400 ${isFullscreen ? "" : "lg:hidden"}`}
                   aria-label="Open detail panel"
                 >
                   Info
@@ -678,6 +894,15 @@ export default function Home() {
                     </svg>
                   )}
                 </button>
+                {isZoomed && (
+                  <button
+                    onClick={handleResetZoom}
+                    className="flex h-10 items-center justify-center rounded-full border border-white/20 bg-slate-900/70 px-3 text-[11px] font-medium text-indigo-50 shadow-lg shadow-indigo-900/40 backdrop-blur-sm transition hover:border-white/50 hover:bg-white/10"
+                    title="Reset zoom"
+                  >
+                    Reset
+                  </button>
+                )}
               </div>
 
             </div>
