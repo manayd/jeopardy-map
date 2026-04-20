@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { PracticeCard, PracticeDeckConfig } from "@/lib/practice-data";
 
 type PracticeMode = "flashcards" | "multiple-choice";
@@ -56,6 +56,7 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
   const [attemptCount, setAttemptCount] = useState(0);
   const [streak, setStreak] = useState(0);
   const [bestStreak, setBestStreak] = useState(0);
+  const [showMobileStats, setShowMobileStats] = useState(false);
 
   if (!items.length) {
     return (
@@ -127,6 +128,76 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
     setStreak(0);
   };
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => {
+    if (mode !== "flashcards") return;
+
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      switch (e.code) {
+        case "Space":
+          e.preventDefault();
+          setShowAnswer((v) => !v);
+          break;
+        case "Digit1":
+          if (showAnswer) scoreFlashcard("known");
+          break;
+        case "Digit2":
+          if (showAnswer) scoreFlashcard("review");
+          break;
+        case "ArrowRight":
+          nextFlashcard();
+          break;
+      }
+    };
+
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+    // scoreFlashcard and nextFlashcard only use stable setters
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, showAnswer]);
+
+  const SidebarContent = () => (
+    <aside className="space-y-4">
+      <div className="rounded-[2rem] border border-white/10 bg-white/6 p-5 shadow-2xl shadow-black/30 backdrop-blur-xl">
+        <p className="text-[11px] uppercase tracking-[0.26em] text-indigo-200">Deck Stats</p>
+        <div className="mt-4 grid gap-3">
+          <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+            <div className="text-2xl font-semibold text-white">{items.length}</div>
+            <div className="mt-1 text-sm text-slate-300">Entries in the deck</div>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+            <div className="text-2xl font-semibold text-white">
+              {mode === "flashcards" ? progress : attemptCount}
+            </div>
+            <div className="mt-1 text-sm text-slate-300">
+              {mode === "flashcards" ? "Cards seen this run" : "Questions answered"}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-[2rem] border border-white/10 bg-white/6 p-5 shadow-2xl shadow-black/30 backdrop-blur-xl">
+        <p className="text-[11px] uppercase tracking-[0.26em] text-indigo-200">How To Use</p>
+        <div className="mt-4 space-y-3 text-sm leading-relaxed text-slate-200">
+          {deck.notes.map((note) => (
+            <p key={note}>{note}</p>
+          ))}
+        </div>
+        {mode === "flashcards" && (
+          <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/50 p-3 text-xs text-slate-300">
+            <p className="font-semibold text-slate-200 mb-1">Keyboard shortcuts</p>
+            <p>Space — show / hide answer</p>
+            <p>1 — I knew it</p>
+            <p>2 — Need it again</p>
+            <p>→ — Next card</p>
+          </div>
+        )}
+      </div>
+    </aside>
+  );
+
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
       <section className="rounded-[2rem] border border-white/10 bg-white/6 p-5 shadow-2xl shadow-black/30 backdrop-blur-xl lg:p-6">
@@ -136,12 +207,16 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
               Practice Modes
             </p>
             <h2 className="mt-2 text-2xl font-semibold text-white">{deck.title}</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-200/85">
+            <p className="mt-2 hidden max-w-2xl text-sm leading-relaxed text-slate-200 lg:block">
               Switch between self-graded flashcards and scored multiple choice for
               deliberate repetition instead of passive review.
             </p>
           </div>
-          <div className="inline-flex rounded-full border border-white/10 bg-slate-950/50 p-1">
+          <div
+            role="tablist"
+            aria-label="Practice mode"
+            className="inline-flex rounded-full border border-white/10 bg-slate-950/50 p-1"
+          >
             {(["flashcards", "multiple-choice"] as const).map((tab) => {
               const active = tab === mode;
               const label = tab === "flashcards" ? "Flashcards" : "Multiple Choice";
@@ -149,11 +224,13 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
                 <button
                   key={tab}
                   type="button"
+                  role="tab"
+                  aria-selected={active}
                   onClick={() => setMode(tab)}
                   className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
                     active
                       ? "bg-emerald-300 text-slate-950"
-                      : "text-slate-200 hover:bg-white/10 hover:text-white"
+                      : "border border-white/15 text-slate-200 hover:bg-white/10 hover:text-white"
                   }`}
                 >
                   {label}
@@ -165,7 +242,7 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
 
         {mode === "flashcards" ? (
           <div className="mt-6 space-y-5">
-            <div className="flex flex-wrap items-center gap-3 text-sm text-slate-200/80">
+            <div className="flex flex-wrap items-center gap-3 text-sm text-slate-200">
               <span className="rounded-full border border-white/10 bg-slate-950/50 px-3 py-1.5">
                 Card {progress} of {items.length}
               </span>
@@ -186,62 +263,111 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
               </div>
 
               <div className="mt-8 rounded-[1.5rem] border border-dashed border-white/15 bg-black/20 p-5">
-                <p className="text-[11px] uppercase tracking-[0.24em] text-slate-400">
+                <p className="text-[11px] uppercase tracking-[0.24em] text-slate-300">
                   {deck.answerLabel}
                 </p>
-                {showAnswer ? (
-                  <p className="mt-3 text-xl leading-relaxed text-emerald-100 lg:text-2xl">
-                    {currentCard.answer}
-                  </p>
-                ) : (
-                  <p className="mt-3 text-lg text-slate-300/65">
-                    Reveal the answer when you are ready.
-                  </p>
-                )}
+                <div aria-live="polite">
+                  {showAnswer ? (
+                    <p className="mt-3 text-xl leading-relaxed text-emerald-100 lg:text-2xl">
+                      {currentCard.answer}
+                    </p>
+                  ) : (
+                    <p className="mt-3 text-lg text-slate-300/70">
+                      Reveal the answer when you are ready.
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-3">
+            {!showAnswer ? (
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAnswer(true)}
+                  className="rounded-full bg-emerald-300 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-200"
+                >
+                  Show answer
+                  <span className="ml-2 text-xs opacity-60">Space</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={nextFlashcard}
+                  className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-indigo-50 transition hover:border-white/40 hover:bg-white/10"
+                >
+                  Next card →
+                </button>
+                <button
+                  type="button"
+                  onClick={resetFlashcards}
+                  className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-indigo-50 transition hover:border-white/40 hover:bg-white/10"
+                >
+                  Shuffle deck
+                </button>
+              </div>
+            ) : (
+              <div>
+                <p className="mb-2 text-xs text-slate-300">How well did you know this?</p>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={() => scoreFlashcard("known")}
+                    className="rounded-full bg-emerald-300 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-200"
+                  >
+                    ✓ I knew it
+                    <span className="ml-2 text-xs opacity-60">1</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => scoreFlashcard("review")}
+                    className="rounded-full bg-amber-300 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-amber-200"
+                  >
+                    ↻ Need it again
+                    <span className="ml-2 text-xs opacity-60">2</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowAnswer(false)}
+                    className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-indigo-50 transition hover:border-white/40 hover:bg-white/10"
+                  >
+                    Hide answer
+                  </button>
+                  <button
+                    type="button"
+                    onClick={nextFlashcard}
+                    className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-indigo-50 transition hover:border-white/40 hover:bg-white/10"
+                  >
+                    Next card →
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetFlashcards}
+                    className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-indigo-50 transition hover:border-white/40 hover:bg-white/10"
+                  >
+                    Shuffle deck
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="xl:hidden">
               <button
                 type="button"
-                onClick={() => setShowAnswer((value) => !value)}
+                onClick={() => setShowMobileStats((v) => !v)}
                 className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-indigo-50 transition hover:border-white/40 hover:bg-white/10"
               >
-                {showAnswer ? "Hide answer" : "Show answer"}
+                {showMobileStats ? "Hide stats & help ▲" : "Stats & help ▼"}
               </button>
-              <button
-                type="button"
-                onClick={() => scoreFlashcard("known")}
-                className="rounded-full bg-emerald-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-200"
-              >
-                I knew it
-              </button>
-              <button
-                type="button"
-                onClick={() => scoreFlashcard("review")}
-                className="rounded-full bg-amber-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-amber-200"
-              >
-                Need it again
-              </button>
-              <button
-                type="button"
-                onClick={nextFlashcard}
-                className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-indigo-50 transition hover:border-white/40 hover:bg-white/10"
-              >
-                Next card
-              </button>
-              <button
-                type="button"
-                onClick={resetFlashcards}
-                className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-indigo-50 transition hover:border-white/40 hover:bg-white/10"
-              >
-                Shuffle deck
-              </button>
+              {showMobileStats && (
+                <div className="mt-4">
+                  <SidebarContent />
+                </div>
+              )}
             </div>
           </div>
         ) : (
           <div className="mt-6 space-y-5">
-            <div className="flex flex-wrap items-center gap-3 text-sm text-slate-200/80">
+            <div className="flex flex-wrap items-center gap-3 text-sm text-slate-200">
               <span className="rounded-full border border-white/10 bg-slate-950/50 px-3 py-1.5">
                 Attempts: {attemptCount}
               </span>
@@ -319,42 +445,32 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
               >
                 Reset score
               </button>
-              <span className="self-center text-sm text-slate-300/75">
+              <span className="self-center text-sm text-slate-300">
                 Current streak: {streak}
               </span>
+            </div>
+
+            <div className="xl:hidden">
+              <button
+                type="button"
+                onClick={() => setShowMobileStats((v) => !v)}
+                className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-indigo-50 transition hover:border-white/40 hover:bg-white/10"
+              >
+                {showMobileStats ? "Hide stats & help ▲" : "Stats & help ▼"}
+              </button>
+              {showMobileStats && (
+                <div className="mt-4">
+                  <SidebarContent />
+                </div>
+              )}
             </div>
           </div>
         )}
       </section>
 
-      <aside className="space-y-4">
-        <div className="rounded-[2rem] border border-white/10 bg-white/6 p-5 shadow-2xl shadow-black/30 backdrop-blur-xl">
-          <p className="text-[11px] uppercase tracking-[0.26em] text-indigo-200">Deck Stats</p>
-          <div className="mt-4 grid gap-3">
-            <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
-              <div className="text-2xl font-semibold text-white">{items.length}</div>
-              <div className="mt-1 text-sm text-slate-300/75">Entries in the deck</div>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
-              <div className="text-2xl font-semibold text-white">
-                {mode === "flashcards" ? progress : attemptCount}
-              </div>
-              <div className="mt-1 text-sm text-slate-300/75">
-                {mode === "flashcards" ? "Cards seen this run" : "Questions answered"}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-[2rem] border border-white/10 bg-white/6 p-5 shadow-2xl shadow-black/30 backdrop-blur-xl">
-          <p className="text-[11px] uppercase tracking-[0.26em] text-indigo-200">How To Use</p>
-          <div className="mt-4 space-y-3 text-sm leading-relaxed text-slate-200/85">
-            {deck.notes.map((note) => (
-              <p key={note}>{note}</p>
-            ))}
-          </div>
-        </div>
-      </aside>
+      <div className="hidden xl:block">
+        <SidebarContent />
+      </div>
     </div>
   );
 }

@@ -24,7 +24,7 @@ export function PracticeDeckPage({ deckSlug }: { deckSlug: string }) {
                   Practice Deck
                 </p>
                 <h1 className="mt-3 text-4xl font-semibold text-white">{deck.title}</h1>
-                <p className="mt-4 max-w-3xl text-sm leading-relaxed text-slate-200/85">
+                <p className="mt-4 max-w-3xl text-sm leading-relaxed text-slate-200">
                   {deck.description}
                 </p>
               </div>

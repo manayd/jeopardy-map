@@ -61,12 +61,34 @@ const normalizeTopic = (topic: RawTopic): NormalizedTopic => ({
   children: topic.children?.map(normalizeTopic) ?? [],
 });
 
+/** Recursively collapse nodes that have exactly one child by hoisting grandchildren up. */
+function collapseOnlyChildren(topic: NormalizedTopic): NormalizedTopic {
+  // First collapse children bottom-up
+  const collapsedChildren = topic.children.map(collapseOnlyChildren);
+
+  // Then collapse any single-child nodes at this level
+  const hoisted: NormalizedTopic[] = [];
+  for (const child of collapsedChildren) {
+    if (child.children.length === 1) {
+      hoisted.push(...child.children);
+    } else {
+      hoisted.push(child);
+    }
+  }
+
+  // If hoisting changed anything, recurse again to catch newly created singletons
+  const changed = hoisted.length !== collapsedChildren.length || hoisted.some((c, i) => c !== collapsedChildren[i]);
+  const finalChildren = changed ? hoisted.map(collapseOnlyChildren) : hoisted;
+
+  return { ...topic, children: finalChildren, childCount: finalChildren.length };
+}
+
 export async function GET() {
   try {
     const filePath = path.join(process.cwd(), "data", "processed", "topics.json");
     const raw = await fs.readFile(filePath, "utf8");
     const parsed = JSON.parse(raw) as RawTopic;
-    const normalized = normalizeTopic(parsed);
+    const normalized = collapseOnlyChildren(normalizeTopic(parsed));
     return NextResponse.json(normalized, {
       headers: { "Cache-Control": "public, max-age=60" },
     });

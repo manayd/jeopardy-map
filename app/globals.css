@@ -28,8 +28,16 @@ body {
   min-height: 100vh;
 }
 
-* {
-  scroll-behavior: smooth;
+@media (prefers-reduced-motion: no-preference) {
+  * {
+    scroll-behavior: smooth;
+  }
+}
+
+*:focus-visible {
+  outline: 2px solid #34d6a8;
+  outline-offset: 2px;
+  outline-color: rgba(52, 214, 168, 0.8);
 }
 
 ::selection {
