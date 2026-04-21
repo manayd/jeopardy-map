@@ -63,24 +63,18 @@ const normalizeTopic = (topic: RawTopic): NormalizedTopic => ({
 
 /** Recursively collapse nodes that have exactly one child by hoisting grandchildren up. */
 function collapseOnlyChildren(topic: NormalizedTopic): NormalizedTopic {
-  // First collapse children bottom-up
-  const collapsedChildren = topic.children.map(collapseOnlyChildren);
+  if (!topic.children.length) return topic;
 
-  // Then collapse any single-child nodes at this level
-  const hoisted: NormalizedTopic[] = [];
-  for (const child of collapsedChildren) {
-    if (child.children.length === 1) {
-      hoisted.push(...child.children);
-    } else {
-      hoisted.push(child);
-    }
+  // Collapse children bottom-up first
+  let children = topic.children.map(collapseOnlyChildren);
+
+  // If this node has exactly 1 child, skip that child and use its children instead.
+  // Repeat until we have 0 or 2+ children (handles chains of singletons).
+  while (children.length === 1 && children[0].children.length > 0) {
+    children = children[0].children.map(collapseOnlyChildren);
   }
 
-  // If hoisting changed anything, recurse again to catch newly created singletons
-  const changed = hoisted.length !== collapsedChildren.length || hoisted.some((c, i) => c !== collapsedChildren[i]);
-  const finalChildren = changed ? hoisted.map(collapseOnlyChildren) : hoisted;
-
-  return { ...topic, children: finalChildren, childCount: finalChildren.length };
+  return { ...topic, children, childCount: children.length };
 }
 
 export async function GET() {
