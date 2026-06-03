@@ -271,10 +271,8 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
             <p className="text-[11px] uppercase tracking-[0.26em] text-indigo-200">
               Practice Modes
             </p>
-            <h2 className="mt-2 text-2xl font-semibold text-white">{deck.title}</h2>
             <p className="mt-2 hidden max-w-2xl text-sm leading-relaxed text-slate-200 lg:block">
-              Switch between self-graded flashcards and scored multiple choice for
-              deliberate repetition instead of passive review.
+              Self-graded flashcards or scored multiple choice — switch any time.
             </p>
           </div>
           <div
