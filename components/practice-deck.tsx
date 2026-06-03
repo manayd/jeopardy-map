@@ -45,11 +45,15 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
   const items = deck.items;
   const deckIndices = items.map((_, index) => index);
   const [mode, setMode] = useState<PracticeMode>("flashcards");
-  const [flashcardOrder, setFlashcardOrder] = useState(() => shuffle(deckIndices));
-  const [flashcardIndex, setFlashcardIndex] = useState(0);
+  const [reviewQueue, setReviewQueue] = useState<number[]>(() => shuffle(deckIndices));
+  const [queueIndex, setQueueIndex] = useState(0);
+  const [needAgainQueue, setNeedAgainQueue] = useState<number[]>([]);
+  const [round, setRound] = useState(1);
+  const [knownThisRound, setKnownThisRound] = useState(0);
+  const [reviewThisRound, setReviewThisRound] = useState(0);
+  const [roundComplete, setRoundComplete] = useState(false);
+  const [completed, setCompleted] = useState(false);
   const [showAnswer, setShowAnswer] = useState(false);
-  const [knownCount, setKnownCount] = useState(0);
-  const [reviewCount, setReviewCount] = useState(0);
   const [question, setQuestion] = useState(() => buildQuestion(items));
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [correctCount, setCorrectCount] = useState(0);
@@ -66,32 +70,74 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
     );
   }
 
-  const currentCard = items[flashcardOrder[flashcardIndex] ?? 0] ?? items[0];
-  const progress = flashcardIndex + 1;
+  const currentCardIndex = reviewQueue[queueIndex] ?? deckIndices[0];
+  const currentCard = items[currentCardIndex] ?? items[0];
+  const progress = queueIndex + 1;
+  const roundSize = reviewQueue.length;
   const accuracy = attemptCount === 0 ? 0 : Math.round((correctCount / attemptCount) * 100);
   const answered = selectedOption !== null;
   const selectedCorrect = selectedOption === question.prompt.answer;
 
   const resetFlashcards = () => {
-    setFlashcardOrder(shuffle(deckIndices));
-    setFlashcardIndex(0);
+    setReviewQueue(shuffle(deckIndices));
+    setQueueIndex(0);
+    setNeedAgainQueue([]);
+    setRound(1);
+    setKnownThisRound(0);
+    setReviewThisRound(0);
+    setRoundComplete(false);
+    setCompleted(false);
     setShowAnswer(false);
-    setKnownCount(0);
-    setReviewCount(0);
   };
 
   const nextFlashcard = () => {
-    setFlashcardIndex((currentIndex) => (currentIndex + 1) % flashcardOrder.length);
+    if (reviewQueue.length === 0) return;
+    setQueueIndex((currentIndex) => (currentIndex + 1) % reviewQueue.length);
     setShowAnswer(false);
   };
 
   const scoreFlashcard = (result: "known" | "review") => {
-    if (result === "known") {
-      setKnownCount((value) => value + 1);
+    if (roundComplete || completed) return;
+
+    let nextNeedAgain = needAgainQueue;
+    if (result === "review") {
+      if (!needAgainQueue.includes(currentCardIndex)) {
+        nextNeedAgain = [...needAgainQueue, currentCardIndex];
+      }
+      setReviewThisRound((value) => value + 1);
     } else {
-      setReviewCount((value) => value + 1);
+      if (needAgainQueue.includes(currentCardIndex)) {
+        nextNeedAgain = needAgainQueue.filter((index) => index !== currentCardIndex);
+      }
+      setKnownThisRound((value) => value + 1);
     }
-    nextFlashcard();
+    setNeedAgainQueue(nextNeedAgain);
+
+    const isLast = queueIndex >= reviewQueue.length - 1;
+    if (isLast) {
+      setShowAnswer(false);
+      if (nextNeedAgain.length === 0) {
+        setCompleted(true);
+      } else {
+        setRoundComplete(true);
+      }
+      return;
+    }
+
+    setQueueIndex((value) => value + 1);
+    setShowAnswer(false);
+  };
+
+  const startNextRound = () => {
+    if (needAgainQueue.length === 0) return;
+    setReviewQueue(shuffle(needAgainQueue));
+    setQueueIndex(0);
+    setNeedAgainQueue([]);
+    setRound((value) => value + 1);
+    setKnownThisRound(0);
+    setReviewThisRound(0);
+    setRoundComplete(false);
+    setShowAnswer(false);
   };
 
   const nextQuestion = () => {
@@ -135,6 +181,22 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
     const handleKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
+      if (roundComplete) {
+        if (e.code === "Enter") {
+          e.preventDefault();
+          startNextRound();
+        }
+        return;
+      }
+
+      if (completed) {
+        if (e.code === "Enter") {
+          e.preventDefault();
+          resetFlashcards();
+        }
+        return;
+      }
+
       switch (e.code) {
         case "Space":
           e.preventDefault();
@@ -154,9 +216,9 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
 
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-    // scoreFlashcard and nextFlashcard only use stable setters
+    // scoreFlashcard, nextFlashcard, startNextRound, resetFlashcards use stable setters
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, showAnswer]);
+  }, [mode, showAnswer, roundComplete, completed]);
 
   const SidebarContent = () => (
     <aside className="space-y-4">
@@ -169,10 +231,12 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
           </div>
           <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
             <div className="text-2xl font-semibold text-white">
-              {mode === "flashcards" ? progress : attemptCount}
+              {mode === "flashcards" ? `Round ${round}` : attemptCount}
             </div>
             <div className="mt-1 text-sm text-slate-300">
-              {mode === "flashcards" ? "Cards seen this run" : "Questions answered"}
+              {mode === "flashcards"
+                ? `${roundSize} card${roundSize === 1 ? "" : "s"} this round`
+                : "Questions answered"}
             </div>
           </div>
         </div>
@@ -191,7 +255,8 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
             <p>Space — show / hide answer</p>
             <p>1 — I knew it</p>
             <p>2 — Need it again</p>
-            <p>→ — Next card</p>
+            <p>→ — Next card (skip)</p>
+            <p>Enter — Start next round / Restart</p>
           </div>
         )}
       </div>
@@ -243,111 +308,176 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
         {mode === "flashcards" ? (
           <div className="mt-6 space-y-5">
             <div className="flex flex-wrap items-center gap-3 text-sm text-slate-200">
-              <span className="rounded-full border border-white/10 bg-slate-950/50 px-3 py-1.5">
-                Card {progress} of {items.length}
+              <span className="rounded-full border border-indigo-300/20 bg-indigo-300/10 px-3 py-1.5 text-indigo-100">
+                Round {round}
               </span>
+              {!completed && !roundComplete && (
+                <span className="rounded-full border border-white/10 bg-slate-950/50 px-3 py-1.5">
+                  Card {progress} of {roundSize}
+                </span>
+              )}
               <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1.5 text-emerald-100">
-                Knew it: {knownCount}
+                Knew it: {knownThisRound}
               </span>
               <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1.5 text-amber-100">
-                Review: {reviewCount}
+                Need again: {reviewThisRound}
+              </span>
+              <span className="rounded-full border border-sky-300/20 bg-sky-300/10 px-3 py-1.5 text-sky-100">
+                Queued for next: {needAgainQueue.length}
               </span>
             </div>
 
-            <div className="rounded-[2rem] border border-white/10 bg-[linear-gradient(160deg,rgba(15,23,42,0.95),rgba(30,41,59,0.85))] p-6 lg:p-8">
-              <p className="text-[11px] uppercase tracking-[0.26em] text-indigo-200">
-                {deck.promptLabel}
-              </p>
-              <div className="mt-5 text-3xl font-semibold text-white lg:text-5xl">
-                {currentCard.prompt}
-              </div>
-
-              <div className="mt-8 rounded-[1.5rem] border border-dashed border-white/15 bg-black/20 p-5">
-                <p className="text-[11px] uppercase tracking-[0.24em] text-slate-300">
-                  {deck.answerLabel}
+            {completed ? (
+              <div className="rounded-[2rem] border border-emerald-300/30 bg-[linear-gradient(160deg,rgba(6,78,59,0.6),rgba(15,23,42,0.85))] p-6 lg:p-8">
+                <p className="text-[11px] uppercase tracking-[0.26em] text-emerald-200">
+                  Deck mastered
                 </p>
-                <div aria-live="polite">
-                  {showAnswer ? (
-                    <p className="mt-3 text-xl leading-relaxed text-emerald-100 lg:text-2xl">
-                      {currentCard.answer}
-                    </p>
-                  ) : (
-                    <p className="mt-3 text-lg text-slate-300/70">
-                      Reveal the answer when you are ready.
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {!showAnswer ? (
-              <div className="flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowAnswer(true)}
-                  className="rounded-full bg-emerald-300 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-200"
-                >
-                  Show answer
-                  <span className="ml-2 text-xs opacity-60">Space</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={nextFlashcard}
-                  className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-indigo-50 transition hover:border-white/40 hover:bg-white/10"
-                >
-                  Next card →
-                </button>
-                <button
-                  type="button"
-                  onClick={resetFlashcards}
-                  className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-indigo-50 transition hover:border-white/40 hover:bg-white/10"
-                >
-                  Shuffle deck
-                </button>
-              </div>
-            ) : (
-              <div>
-                <p className="mb-2 text-xs text-slate-300">How well did you know this?</p>
-                <div className="flex flex-wrap gap-3">
+                <h3 className="mt-4 text-3xl font-semibold text-white lg:text-4xl">
+                  Nothing left to review!
+                </h3>
+                <p className="mt-3 text-sm leading-relaxed text-emerald-50/90">
+                  You cleared every card across {round} round{round === 1 ? "" : "s"}.
+                  Start over to keep the recall fresh.
+                </p>
+                <div className="mt-6 flex flex-wrap gap-3">
                   <button
                     type="button"
-                    onClick={() => scoreFlashcard("known")}
+                    onClick={resetFlashcards}
                     className="rounded-full bg-emerald-300 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-200"
                   >
-                    ✓ I knew it
-                    <span className="ml-2 text-xs opacity-60">1</span>
+                    Restart deck
+                    <span className="ml-2 text-xs opacity-60">Enter</span>
                   </button>
+                </div>
+              </div>
+            ) : roundComplete ? (
+              <div className="rounded-[2rem] border border-amber-300/30 bg-[linear-gradient(160deg,rgba(120,53,15,0.5),rgba(15,23,42,0.85))] p-6 lg:p-8">
+                <p className="text-[11px] uppercase tracking-[0.26em] text-amber-200">
+                  Round {round} complete
+                </p>
+                <h3 className="mt-4 text-3xl font-semibold text-white lg:text-4xl">
+                  {needAgainQueue.length} card{needAgainQueue.length === 1 ? "" : "s"} to review
+                </h3>
+                <p className="mt-3 text-sm leading-relaxed text-amber-50/90">
+                  Round {round + 1} will only show the cards you marked
+                  &ldquo;Need it again&rdquo;. Keep going until the queue is empty.
+                </p>
+                <div className="mt-6 flex flex-wrap gap-3">
                   <button
                     type="button"
-                    onClick={() => scoreFlashcard("review")}
+                    onClick={startNextRound}
                     className="rounded-full bg-amber-300 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-amber-200"
                   >
-                    ↻ Need it again
-                    <span className="ml-2 text-xs opacity-60">2</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowAnswer(false)}
-                    className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-indigo-50 transition hover:border-white/40 hover:bg-white/10"
-                  >
-                    Hide answer
-                  </button>
-                  <button
-                    type="button"
-                    onClick={nextFlashcard}
-                    className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-indigo-50 transition hover:border-white/40 hover:bg-white/10"
-                  >
-                    Next card →
+                    Start round {round + 1} →
+                    <span className="ml-2 text-xs opacity-60">Enter</span>
                   </button>
                   <button
                     type="button"
                     onClick={resetFlashcards}
                     className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-indigo-50 transition hover:border-white/40 hover:bg-white/10"
                   >
-                    Shuffle deck
+                    Restart whole deck
                   </button>
                 </div>
               </div>
+            ) : (
+              <>
+                <div className="rounded-[2rem] border border-white/10 bg-[linear-gradient(160deg,rgba(15,23,42,0.95),rgba(30,41,59,0.85))] p-6 lg:p-8">
+                  <p className="text-[11px] uppercase tracking-[0.26em] text-indigo-200">
+                    {deck.promptLabel}
+                  </p>
+                  <div className="mt-5 text-3xl font-semibold text-white lg:text-5xl">
+                    {currentCard.prompt}
+                  </div>
+
+                  <div className="mt-8 rounded-[1.5rem] border border-dashed border-white/15 bg-black/20 p-5">
+                    <p className="text-[11px] uppercase tracking-[0.24em] text-slate-300">
+                      {deck.answerLabel}
+                    </p>
+                    <div aria-live="polite">
+                      {showAnswer ? (
+                        <p className="mt-3 text-xl leading-relaxed text-emerald-100 lg:text-2xl">
+                          {currentCard.answer}
+                        </p>
+                      ) : (
+                        <p className="mt-3 text-lg text-slate-300/70">
+                          Reveal the answer when you are ready.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {!showAnswer ? (
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowAnswer(true)}
+                      className="rounded-full bg-emerald-300 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-200"
+                    >
+                      Show answer
+                      <span className="ml-2 text-xs opacity-60">Space</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={nextFlashcard}
+                      className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-indigo-50 transition hover:border-white/40 hover:bg-white/10"
+                    >
+                      Skip card →
+                    </button>
+                    <button
+                      type="button"
+                      onClick={resetFlashcards}
+                      className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-indigo-50 transition hover:border-white/40 hover:bg-white/10"
+                    >
+                      Restart deck
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="mb-2 text-xs text-slate-300">How well did you know this?</p>
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        onClick={() => scoreFlashcard("known")}
+                        className="rounded-full bg-emerald-300 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-200"
+                      >
+                        ✓ I knew it
+                        <span className="ml-2 text-xs opacity-60">1</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => scoreFlashcard("review")}
+                        className="rounded-full bg-amber-300 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-amber-200"
+                      >
+                        ↻ Need it again
+                        <span className="ml-2 text-xs opacity-60">2</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowAnswer(false)}
+                        className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-indigo-50 transition hover:border-white/40 hover:bg-white/10"
+                      >
+                        Hide answer
+                      </button>
+                      <button
+                        type="button"
+                        onClick={nextFlashcard}
+                        className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-indigo-50 transition hover:border-white/40 hover:bg-white/10"
+                      >
+                        Skip card →
+                      </button>
+                      <button
+                        type="button"
+                        onClick={resetFlashcards}
+                        className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-indigo-50 transition hover:border-white/40 hover:bg-white/10"
+                      >
+                        Restart deck
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
 
             <div className="xl:hidden">
