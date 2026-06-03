@@ -314,15 +314,21 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
                   Card {progress} of {roundSize}
                 </span>
               )}
-              <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1.5 text-emerald-100">
-                Knew it: {knownThisRound}
-              </span>
-              <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1.5 text-amber-100">
-                Need again: {reviewThisRound}
-              </span>
-              <span className="rounded-full border border-sky-300/20 bg-sky-300/10 px-3 py-1.5 text-sky-100">
-                Queued for next: {needAgainQueue.length}
-              </span>
+              {knownThisRound > 0 && (
+                <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1.5 text-emerald-100">
+                  Knew it: {knownThisRound}
+                </span>
+              )}
+              {reviewThisRound > 0 && (
+                <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1.5 text-amber-100">
+                  Need again: {reviewThisRound}
+                </span>
+              )}
+              {needAgainQueue.length > 0 && !completed && (
+                <span className="rounded-full border border-sky-300/20 bg-sky-300/10 px-3 py-1.5 text-sky-100">
+                  To review next: {needAgainQueue.length}
+                </span>
+              )}
             </div>
 
             {completed ? (
