@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DeckProgressChip } from "@/components/deck-progress-chip";
 import { SiteNav } from "@/components/site-nav";
 import { practiceTopics } from "@/lib/practice-data";
 
@@ -51,9 +52,10 @@ export default function PracticePage() {
                     {topic.description}
                   </p>
 
-                  <div className="mt-6 flex items-center justify-between">
-                    <span className="text-sm text-slate-300/70">
+                  <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+                    <span className="flex items-center gap-3 text-sm text-slate-300/70">
                       {topic.itemCount ? `${topic.itemCount} prompts available` : "Deck in progress"}
+                      {available && <DeckProgressChip slug={topic.slug} />}
                     </span>
                     <span className="text-sm font-semibold text-indigo-100">
                       {available ? "Open practice" : "On deck"}

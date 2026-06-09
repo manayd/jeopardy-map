@@ -2,6 +2,11 @@
 
 import { useEffect, useState } from "react";
 import type { PracticeCard, PracticeDeckConfig } from "@/lib/practice-data";
+import {
+  clearFlashcardProgress,
+  loadFlashcardProgress,
+  saveFlashcardProgress,
+} from "@/lib/practice-progress";
 
 type PracticeMode = "flashcards" | "multiple-choice";
 
@@ -54,6 +59,8 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
   const [roundComplete, setRoundComplete] = useState(false);
   const [completed, setCompleted] = useState(false);
   const [showAnswer, setShowAnswer] = useState(false);
+  const [resumed, setResumed] = useState(false);
+  const [storageReady, setStorageReady] = useState(false);
   const [question, setQuestion] = useState(() => buildQuestion(items));
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [correctCount, setCorrectCount] = useState(0);
@@ -79,6 +86,7 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
   const selectedCorrect = selectedOption === question.prompt.answer;
 
   const resetFlashcards = () => {
+    clearFlashcardProgress(deck.slug);
     setReviewQueue(shuffle(deckIndices));
     setQueueIndex(0);
     setNeedAgainQueue([]);
@@ -88,6 +96,7 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
     setRoundComplete(false);
     setCompleted(false);
     setShowAnswer(false);
+    setResumed(false);
   };
 
   const nextFlashcard = () => {
@@ -98,6 +107,7 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
 
   const scoreFlashcard = (result: "known" | "review") => {
     if (roundComplete || completed) return;
+    setResumed(false);
 
     let nextNeedAgain = needAgainQueue;
     if (result === "review") {
@@ -138,6 +148,7 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
     setReviewThisRound(0);
     setRoundComplete(false);
     setShowAnswer(false);
+    setResumed(false);
   };
 
   const nextQuestion = () => {
@@ -219,6 +230,71 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
     // scoreFlashcard, nextFlashcard, startNextRound, resetFlashcards use stable setters
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, showAnswer, roundComplete, completed]);
+
+  // Restore saved flashcard progress once per deck. Saved indices are only
+  // trusted when the deck is the same size it was when progress was written.
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => {
+    const saved = loadFlashcardProgress(deck.slug);
+    if (saved && saved.deckSize === items.length) {
+      const validIndex = (index: number) =>
+        Number.isInteger(index) && index >= 0 && index < items.length;
+      const savedReview = saved.reviewQueue.filter(validIndex);
+      const savedNeedAgain = saved.needAgainQueue.filter(validIndex);
+      if (savedReview.length > 0) {
+        setReviewQueue(savedReview);
+        setQueueIndex(Math.min(Math.max(saved.queueIndex, 0), savedReview.length - 1));
+        setNeedAgainQueue(savedNeedAgain);
+        setRound(saved.round >= 1 ? saved.round : 1);
+        setKnownThisRound(saved.knownThisRound ?? 0);
+        setReviewThisRound(saved.reviewThisRound ?? 0);
+        setRoundComplete(Boolean(saved.roundComplete));
+        setCompleted(Boolean(saved.completed));
+        const hasProgress =
+          saved.round > 1 ||
+          saved.queueIndex > 0 ||
+          savedNeedAgain.length > 0 ||
+          saved.roundComplete ||
+          saved.completed;
+        if (hasProgress) setResumed(true);
+      }
+    }
+    setStorageReady(true);
+    // items derive from deck, so deck.slug is the only meaningful dependency
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deck.slug]);
+
+  // Persist progress so a refresh (or returning days later) resumes the run.
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => {
+    if (!storageReady) return;
+    saveFlashcardProgress(deck.slug, {
+      version: 1,
+      title: deck.title,
+      deckSize: items.length,
+      reviewQueue,
+      queueIndex,
+      needAgainQueue,
+      round,
+      knownThisRound,
+      reviewThisRound,
+      roundComplete,
+      completed,
+      updatedAt: new Date().toISOString(),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    storageReady,
+    deck.slug,
+    reviewQueue,
+    queueIndex,
+    needAgainQueue,
+    round,
+    knownThisRound,
+    reviewThisRound,
+    roundComplete,
+    completed,
+  ]);
 
   const SidebarContent = () => (
     <aside className="space-y-4">
@@ -309,6 +385,11 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
               <span className="rounded-full border border-indigo-300/20 bg-indigo-300/10 px-3 py-1.5 text-indigo-100">
                 Round {round}
               </span>
+              {resumed && (
+                <span className="rounded-full border border-fuchsia-300/25 bg-fuchsia-300/10 px-3 py-1.5 text-fuchsia-100">
+                  Resumed from last visit
+                </span>
+              )}
               {!completed && !roundComplete && (
                 <span className="rounded-full border border-white/10 bg-slate-950/50 px-3 py-1.5">
                   Card {progress} of {roundSize}
