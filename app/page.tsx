@@ -484,6 +484,12 @@ export default function Home() {
               <p className="pt-3 text-sm leading-relaxed text-slate-200/90">
                 {detailTopic.summary}
               </p>
+              <Link
+                href={`/practice/topic/${encodeURIComponent(detailTopic.id)}`}
+                className="mt-4 inline-flex w-fit rounded-full bg-emerald-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-200"
+              >
+                Practice this topic →
+              </Link>
               <div className="mt-4 flex-1 overflow-hidden flex flex-col">
                 <div className="text-[11px] uppercase tracking-[0.22em] text-indigo-200/80 mb-3">
                   {detailCluesStatus === "loading"
@@ -798,6 +804,14 @@ export default function Home() {
                   <p className="px-5 pt-3 text-sm leading-relaxed text-slate-200/90">
                     {detailTopic.summary}
                   </p>
+                  <div className="px-5 pt-4">
+                    <Link
+                      href={`/practice/topic/${encodeURIComponent(detailTopic.id)}`}
+                      className="inline-flex rounded-full bg-emerald-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-200"
+                    >
+                      Practice this topic →
+                    </Link>
+                  </div>
                   <div className="mt-4 space-y-4 px-5 pb-6">
                     <div className="text-[11px] uppercase tracking-[0.22em] text-indigo-200/80">
                       {detailCluesStatus === "loading"

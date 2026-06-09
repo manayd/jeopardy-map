@@ -87,7 +87,7 @@ export async function GET(
   try {
     const { id } = await Promise.resolve(params);
     const url = new URL(request.url);
-    const limit = parseLimit(url.searchParams.get("limit"), 8, 50);
+    const limit = parseLimit(url.searchParams.get("limit"), 8, 200);
     const offset = parseOffset(url.searchParams.get("offset"));
 
     const cluesPath = path.join(process.cwd(), "data", "processed", "clues.json");
