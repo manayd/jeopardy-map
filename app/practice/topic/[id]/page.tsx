@@ -18,6 +18,36 @@ type ClueResponse = {
 
 const CLUE_FETCH_LIMIT = 200;
 
+// Each topic deck draws a deterministic pseudo-random sample of the topic's
+// full clue pool, keyed by a seed kept in localStorage: reloads resume the
+// same deck, while "Restart deck" rotates the seed for a fresh draw.
+const seedKey = (topicId: string) => `jeopardy-map:practice-seed:topic-${topicId}`;
+
+const newSeed = () => Math.floor(Math.random() * 1_000_000);
+
+function loadOrCreateSeed(topicId: string): number {
+  try {
+    const raw = window.localStorage.getItem(seedKey(topicId));
+    const parsed = raw === null ? NaN : Number(raw);
+    if (Number.isFinite(parsed)) return parsed;
+    const seed = newSeed();
+    window.localStorage.setItem(seedKey(topicId), String(seed));
+    return seed;
+  } catch {
+    return newSeed();
+  }
+}
+
+function rotateSeed(topicId: string): number {
+  const seed = newSeed();
+  try {
+    window.localStorage.setItem(seedKey(topicId), String(seed));
+  } catch {
+    // ignore — deck still rotates for this visit
+  }
+  return seed;
+}
+
 function buildTopicDeck(topicId: string, data: ClueResponse): PracticeDeckConfig {
   const seen = new Set<string>();
   const items: PracticeCard[] = [];
@@ -61,14 +91,20 @@ export default function TopicPracticePage({
   const topicId = decodeURIComponent(id);
   const [status, setStatus] = useState<"loading" | "error" | "ready">("loading");
   const [deck, setDeck] = useState<PracticeDeckConfig | null>(null);
+  const [seed, setSeed] = useState<number | null>(null);
 
   useEffect(() => {
+    setSeed(loadOrCreateSeed(topicId));
+  }, [topicId]);
+
+  useEffect(() => {
+    if (seed === null) return;
     let alive = true;
     const load = async () => {
       setStatus("loading");
       try {
         const response = await fetch(
-          `/api/topics/${encodeURIComponent(topicId)}/clues?limit=${CLUE_FETCH_LIMIT}`,
+          `/api/topics/${encodeURIComponent(topicId)}/clues?limit=${CLUE_FETCH_LIMIT}&seed=${seed}`,
         );
         if (!response.ok) throw new Error("Failed to load clues");
         const data = (await response.json()) as ClueResponse;
@@ -84,7 +120,7 @@ export default function TopicPracticePage({
     return () => {
       alive = false;
     };
-  }, [topicId]);
+  }, [topicId, seed]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-slate-50">
@@ -129,7 +165,11 @@ export default function TopicPracticePage({
 
           <div className="mt-6">
             {status === "ready" && deck ? (
-              <PracticeDeck deck={deck} />
+              <PracticeDeck
+                key={seed}
+                deck={deck}
+                onRestart={() => setSeed(rotateSeed(topicId))}
+              />
             ) : status === "loading" ? (
               <div className="rounded-[2rem] border border-white/10 bg-white/6 p-6 text-slate-200">
                 Loading clues…

@@ -46,7 +46,14 @@ function buildQuestion(items: PracticeCard[], previousPrompt?: string): Multiple
   };
 }
 
-export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
+export function PracticeDeck({
+  deck,
+  onRestart,
+}: {
+  deck: PracticeDeckConfig;
+  /** Called after a deck restart — lets topic decks draw a fresh clue sample. */
+  onRestart?: () => void;
+}) {
   const items = deck.items;
   const deckIndices = items.map((_, index) => index);
   const [mode, setMode] = useState<PracticeMode>("flashcards");
@@ -97,6 +104,7 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
     setCompleted(false);
     setShowAnswer(false);
     setResumed(false);
+    onRestart?.();
   };
 
   const nextFlashcard = () => {
