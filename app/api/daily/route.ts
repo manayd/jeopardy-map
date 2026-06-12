@@ -25,9 +25,11 @@ export async function GET(request: Request) {
     // Easy-to-hard ramp: single round before double, low values first.
     clues.sort((a, b) => a.round - b.round || a.value - b.value);
 
+    // A given date's quiz never changes, so let the CDN serve it: only the
+    // first request per date pays the serverless cold start.
     return NextResponse.json(
       { date, clues },
-      { headers: { "Cache-Control": "public, max-age=300" } },
+      { headers: { "Cache-Control": "public, max-age=300, s-maxage=86400" } },
     );
   } catch {
     return NextResponse.json(
