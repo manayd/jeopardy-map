@@ -1,7 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
-import crypto from "node:crypto";
+import {
+  categoryId,
+  createClassifier,
+  loadOverrides,
+  loadRules,
+  normalize,
+  parseIntSafe,
+} from "./lib/classify.mjs";
 
 const inputPath = process.argv[2] ?? "jeopardy_clues.tsv";
 const outDir = process.argv[3] ?? "data/processed";
@@ -14,103 +21,18 @@ const maxSamplesPerCluster = Number(process.env.MAX_CLUSTER_SAMPLES ?? 10);
 const maxChildrenPerCluster = Number(process.env.MAX_CLUSTER_CHILDREN ?? 20);
 const maxCluesPerCategory = Number(process.env.MAX_CATEGORY_CLUES ?? 30);
 
-const rulesPath = "config/topic-rules.json";
-const topicRules = JSON.parse(fs.readFileSync(rulesPath, "utf8"));
-const subtopicRules = JSON.parse(fs.readFileSync("config/subtopic-rules.json", "utf8"));
-const clusterRules = JSON.parse(fs.readFileSync("config/cluster-rules.json", "utf8"));
-
-// Load category overrides from LLM classification (if available)
-const overridesPath = "config/category-overrides.json";
-const categoryOverrides = fs.existsSync(overridesPath)
-  ? JSON.parse(fs.readFileSync(overridesPath, "utf8"))
-  : {};
+const rules = loadRules();
+const topicRules = rules.topicRules;
+const categoryOverrides = loadOverrides();
 const overrideCount = Object.keys(categoryOverrides).length;
 if (overrideCount > 0) {
-  console.log(`Loaded ${overrideCount} category overrides from ${overridesPath}`);
+  console.log(`Loaded ${overrideCount} category overrides (curated + auto).`);
 }
 
-// Build a lookup from topic id to topic rule for overrides
-const topicRuleById = new Map(topicRules.map((rule) => [rule.id, rule]));
-
-const miscRule = topicRules.find((rule) => rule.id === "misc") ?? {
-  id: "misc",
-  title: "Unclassified",
-  summary: "Categories awaiting classification.",
-  keywords: [],
-};
-
-const normalize = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
-
-const parseIntSafe = (value) => {
-  const parsed = parseInt(String(value ?? "").replace(/[^0-9-]/g, ""), 10);
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
-const slugify = (value) =>
-  normalize(value)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)+/g, "");
-
-const categoryId = (value) => {
-  const slug = slugify(value);
-  const hash = crypto.createHash("sha1").update(value).digest("hex").slice(0, 6);
-  return `cat:${slug}:${hash}`;
-};
-
-const matchTopic = (category) => {
-  const haystack = normalize(category).toUpperCase();
-
-  // Check LLM-generated overrides first
-  const overrideTopicId = categoryOverrides[haystack];
-  if (overrideTopicId) {
-    const overrideRule = topicRuleById.get(overrideTopicId);
-    if (overrideRule) return overrideRule;
-  }
-
-  for (const rule of topicRules) {
-    if (rule.id === "misc") continue;
-    if (rule.keywords.some((keyword) => haystack.includes(keyword))) {
-      return rule;
-    }
-  }
-  return miscRule;
-};
-
-const matchSubtopic = (topicId, category) => {
-  const rules = subtopicRules[topicId];
-  if (!rules || !rules.length) {
-    return {
-      id: `${topicId}-general`,
-      title: "General",
-      summary: "General subtopic grouping.",
-      keywords: [],
-    };
-  }
-  const haystack = normalize(category).toUpperCase();
-  for (const rule of rules) {
-    if (!rule.keywords?.length) continue;
-    if (rule.keywords.some((keyword) => haystack.includes(keyword))) {
-      return rule;
-    }
-  }
-  return rules.find((rule) => !rule.keywords?.length) ?? rules[rules.length - 1];
-};
-
-const matchCluster = (topicId, category) => {
-  const rules = clusterRules[topicId] ?? clusterRules.default ?? [];
-  if (!rules.length) {
-    return { id: "general", title: "General", summary: "General grouping.", keywords: [] };
-  }
-  const haystack = normalize(category).toUpperCase();
-  for (const rule of rules) {
-    if (!rule.keywords?.length) continue;
-    if (rule.keywords.some((keyword) => haystack.includes(keyword))) {
-      return rule;
-    }
-  }
-  return rules.find((rule) => !rule.keywords?.length) ?? rules[rules.length - 1];
-};
+const { matchTopic, matchSubtopic, matchCluster } = createClassifier(
+  rules,
+  categoryOverrides,
+);
 
 const categories = new Map();
 const topics = new Map();

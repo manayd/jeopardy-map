@@ -1,27 +1,9 @@
 import { NextResponse } from "next/server";
-import fs from "node:fs/promises";
-import path from "node:path";
-
-type RawClue = {
-  prompt?: string;
-  answer?: string;
-  question?: string;
-  air_date?: string;
-  round?: number;
-  value?: number;
-  daily_double_value?: number;
-  category?: string;
-};
-
-type RawTopic = {
-  id: string;
-  title: string;
-  summary: string;
-  clueSamples?: RawClue[];
-  sampleClues?: RawClue[];
-  children?: RawTopic[];
-  childCount?: number;
-};
+import {
+  loadTopicTree,
+  type RawClue,
+  type TreeTopic as RawTopic,
+} from "@/lib/topic-tree";
 
 type NormalizedClue = {
   prompt: string;
@@ -79,14 +61,12 @@ function collapseOnlyChildren(topic: NormalizedTopic): NormalizedTopic {
 
 export async function GET() {
   try {
-    const filePath = path.join(process.cwd(), "data", "processed", "topics.json");
-    const raw = await fs.readFile(filePath, "utf8");
-    const parsed = JSON.parse(raw) as RawTopic;
+    const parsed = await loadTopicTree();
     const normalized = collapseOnlyChildren(normalizeTopic(parsed));
     return NextResponse.json(normalized, {
       headers: { "Cache-Control": "public, max-age=60" },
     });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: "Unable to load topics dataset." },
       { status: 500 },

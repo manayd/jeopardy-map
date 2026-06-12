@@ -1,9 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { FormEvent } from "react";
+import { judgeAnswer } from "@/lib/answer-match";
 import type { PracticeCard, PracticeDeckConfig } from "@/lib/practice-data";
+import {
+  clearFlashcardProgress,
+  loadFlashcardProgress,
+  saveFlashcardProgress,
+} from "@/lib/practice-progress";
 
-type PracticeMode = "flashcards" | "multiple-choice";
+type PracticeMode = "flashcards" | "multiple-choice" | "typed";
+
+const MODE_LABELS: Record<PracticeMode, string> = {
+  flashcards: "Flashcards",
+  "multiple-choice": "Multiple Choice",
+  typed: "Type It",
+};
 
 type MultipleChoiceQuestion = {
   prompt: PracticeCard;
@@ -19,12 +32,16 @@ function shuffle<T>(items: T[]) {
   return next;
 }
 
-function buildQuestion(items: PracticeCard[], previousPrompt?: string): MultipleChoiceQuestion {
-  let prompt = items[Math.floor(Math.random() * items.length)];
-
-  while (items.length > 1 && prompt.prompt === previousPrompt) {
-    prompt = items[Math.floor(Math.random() * items.length)];
+function pickCard(items: PracticeCard[], previousPrompt?: string): PracticeCard {
+  let card = items[Math.floor(Math.random() * items.length)];
+  while (items.length > 1 && card.prompt === previousPrompt) {
+    card = items[Math.floor(Math.random() * items.length)];
   }
+  return card;
+}
+
+function buildQuestion(items: PracticeCard[], previousPrompt?: string): MultipleChoiceQuestion {
+  const prompt = pickCard(items, previousPrompt);
 
   const uniqueAnswers = Array.from(new Set(items.map((item) => item.answer)));
   const optionCount = Math.min(4, uniqueAnswers.length);
@@ -41,7 +58,14 @@ function buildQuestion(items: PracticeCard[], previousPrompt?: string): Multiple
   };
 }
 
-export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
+export function PracticeDeck({
+  deck,
+  onRestart,
+}: {
+  deck: PracticeDeckConfig;
+  /** Called after a deck restart — lets topic decks draw a fresh clue sample. */
+  onRestart?: () => void;
+}) {
   const items = deck.items;
   const deckIndices = items.map((_, index) => index);
   const [mode, setMode] = useState<PracticeMode>("flashcards");
@@ -54,6 +78,8 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
   const [roundComplete, setRoundComplete] = useState(false);
   const [completed, setCompleted] = useState(false);
   const [showAnswer, setShowAnswer] = useState(false);
+  const [resumed, setResumed] = useState(false);
+  const [storageReady, setStorageReady] = useState(false);
   const [question, setQuestion] = useState(() => buildQuestion(items));
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [correctCount, setCorrectCount] = useState(0);
@@ -61,6 +87,16 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
   const [streak, setStreak] = useState(0);
   const [bestStreak, setBestStreak] = useState(0);
   const [showMobileStats, setShowMobileStats] = useState(false);
+  const [typedCard, setTypedCard] = useState<PracticeCard>(() => pickCard(items));
+  const [guess, setGuess] = useState("");
+  const [typedPhase, setTypedPhase] = useState<"answering" | "judged">("answering");
+  const [typedVerdict, setTypedVerdict] = useState<"correct" | "incorrect">("incorrect");
+  const [streakBeforeJudge, setStreakBeforeJudge] = useState(0);
+  const [typedAttempts, setTypedAttempts] = useState(0);
+  const [typedCorrect, setTypedCorrect] = useState(0);
+  const [typedStreak, setTypedStreak] = useState(0);
+  const [typedBestStreak, setTypedBestStreak] = useState(0);
+  const typedInputRef = useRef<HTMLInputElement | null>(null);
 
   if (!items.length) {
     return (
@@ -75,10 +111,13 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
   const progress = queueIndex + 1;
   const roundSize = reviewQueue.length;
   const accuracy = attemptCount === 0 ? 0 : Math.round((correctCount / attemptCount) * 100);
+  const typedAccuracy =
+    typedAttempts === 0 ? 0 : Math.round((typedCorrect / typedAttempts) * 100);
   const answered = selectedOption !== null;
   const selectedCorrect = selectedOption === question.prompt.answer;
 
   const resetFlashcards = () => {
+    clearFlashcardProgress(deck.slug);
     setReviewQueue(shuffle(deckIndices));
     setQueueIndex(0);
     setNeedAgainQueue([]);
@@ -88,6 +127,8 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
     setRoundComplete(false);
     setCompleted(false);
     setShowAnswer(false);
+    setResumed(false);
+    onRestart?.();
   };
 
   const nextFlashcard = () => {
@@ -98,6 +139,7 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
 
   const scoreFlashcard = (result: "known" | "review") => {
     if (roundComplete || completed) return;
+    setResumed(false);
 
     let nextNeedAgain = needAgainQueue;
     if (result === "review") {
@@ -138,6 +180,7 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
     setReviewThisRound(0);
     setRoundComplete(false);
     setShowAnswer(false);
+    setResumed(false);
   };
 
   const nextQuestion = () => {
@@ -152,6 +195,65 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
     setBestStreak(0);
     setSelectedOption(null);
     setQuestion(buildQuestion(items));
+  };
+
+  const commitTypedVerdict = (verdict: "correct" | "incorrect") => {
+    setStreakBeforeJudge(typedStreak);
+    setTypedPhase("judged");
+    setTypedVerdict(verdict);
+    setTypedAttempts((value) => value + 1);
+    if (verdict === "correct") {
+      setTypedCorrect((value) => value + 1);
+      setTypedStreak((value) => {
+        const next = value + 1;
+        setTypedBestStreak((best) => Math.max(best, next));
+        return next;
+      });
+    } else {
+      setTypedStreak(0);
+    }
+  };
+
+  const nextTypedQuestion = () => {
+    setTypedCard(pickCard(items, typedCard.prompt));
+    setGuess("");
+    setTypedPhase("answering");
+  };
+
+  const handleTypedSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (typedPhase === "judged") {
+      nextTypedQuestion();
+      return;
+    }
+    if (!guess.trim()) return;
+    commitTypedVerdict(judgeAnswer(guess, typedCard.answer));
+  };
+
+  const skipTyped = () => {
+    if (typedPhase === "answering") commitTypedVerdict("incorrect");
+  };
+
+  // The matcher can't know every acceptable equivalence ("FDR" for
+  // "Franklin Roosevelt"), so let the user overrule a wrong "incorrect".
+  const overrideTypedCorrect = () => {
+    if (typedPhase !== "judged" || typedVerdict === "correct") return;
+    setTypedVerdict("correct");
+    setTypedCorrect((value) => value + 1);
+    const next = streakBeforeJudge + 1;
+    setTypedStreak(next);
+    setTypedBestStreak((best) => Math.max(best, next));
+  };
+
+  const resetTyped = () => {
+    setTypedAttempts(0);
+    setTypedCorrect(0);
+    setTypedStreak(0);
+    setTypedBestStreak(0);
+    setStreakBeforeJudge(0);
+    setGuess("");
+    setTypedPhase("answering");
+    setTypedCard(pickCard(items));
   };
 
   const handleGuess = (option: string) => {
@@ -220,6 +322,79 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, showAnswer, roundComplete, completed]);
 
+  // Restore saved flashcard progress once per deck. Saved indices are only
+  // trusted when the deck is the same size it was when progress was written.
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => {
+    const saved = loadFlashcardProgress(deck.slug);
+    if (saved && saved.deckSize === items.length) {
+      const validIndex = (index: number) =>
+        Number.isInteger(index) && index >= 0 && index < items.length;
+      const savedReview = saved.reviewQueue.filter(validIndex);
+      const savedNeedAgain = saved.needAgainQueue.filter(validIndex);
+      if (savedReview.length > 0) {
+        setReviewQueue(savedReview);
+        setQueueIndex(Math.min(Math.max(saved.queueIndex, 0), savedReview.length - 1));
+        setNeedAgainQueue(savedNeedAgain);
+        setRound(saved.round >= 1 ? saved.round : 1);
+        setKnownThisRound(saved.knownThisRound ?? 0);
+        setReviewThisRound(saved.reviewThisRound ?? 0);
+        setRoundComplete(Boolean(saved.roundComplete));
+        setCompleted(Boolean(saved.completed));
+        const hasProgress =
+          saved.round > 1 ||
+          saved.queueIndex > 0 ||
+          savedNeedAgain.length > 0 ||
+          saved.roundComplete ||
+          saved.completed;
+        if (hasProgress) setResumed(true);
+      }
+    }
+    setStorageReady(true);
+    // items derive from deck, so deck.slug is the only meaningful dependency
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deck.slug]);
+
+  // Persist progress so a refresh (or returning days later) resumes the run.
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => {
+    if (!storageReady) return;
+    saveFlashcardProgress(deck.slug, {
+      version: 1,
+      title: deck.title,
+      deckSize: items.length,
+      reviewQueue,
+      queueIndex,
+      needAgainQueue,
+      round,
+      knownThisRound,
+      reviewThisRound,
+      roundComplete,
+      completed,
+      updatedAt: new Date().toISOString(),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    storageReady,
+    deck.slug,
+    reviewQueue,
+    queueIndex,
+    needAgainQueue,
+    round,
+    knownThisRound,
+    reviewThisRound,
+    roundComplete,
+    completed,
+  ]);
+
+  // Keep the typed-answer input focused so the user can answer immediately.
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => {
+    if (mode === "typed" && typedPhase === "answering") {
+      typedInputRef.current?.focus();
+    }
+  }, [mode, typedPhase, typedCard]);
+
   const SidebarContent = () => (
     <aside className="space-y-4">
       <div className="rounded-[2rem] border border-white/10 bg-white/6 p-5 shadow-2xl shadow-black/30 backdrop-blur-xl">
@@ -231,12 +406,18 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
           </div>
           <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
             <div className="text-2xl font-semibold text-white">
-              {mode === "flashcards" ? `Round ${round}` : attemptCount}
+              {mode === "flashcards"
+                ? `Round ${round}`
+                : mode === "multiple-choice"
+                  ? attemptCount
+                  : typedAttempts}
             </div>
             <div className="mt-1 text-sm text-slate-300">
               {mode === "flashcards"
                 ? `${roundSize} card${roundSize === 1 ? "" : "s"} this round`
-                : "Questions answered"}
+                : mode === "multiple-choice"
+                  ? "Questions answered"
+                  : "Responses typed"}
             </div>
           </div>
         </div>
@@ -280,9 +461,9 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
             aria-label="Practice mode"
             className="inline-flex rounded-full border border-white/10 bg-slate-950/50 p-1"
           >
-            {(["flashcards", "multiple-choice"] as const).map((tab) => {
+            {(["flashcards", "multiple-choice", "typed"] as const).map((tab) => {
               const active = tab === mode;
-              const label = tab === "flashcards" ? "Flashcards" : "Multiple Choice";
+              const label = MODE_LABELS[tab];
               return (
                 <button
                   key={tab}
@@ -309,6 +490,11 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
               <span className="rounded-full border border-indigo-300/20 bg-indigo-300/10 px-3 py-1.5 text-indigo-100">
                 Round {round}
               </span>
+              {resumed && (
+                <span className="rounded-full border border-fuchsia-300/25 bg-fuchsia-300/10 px-3 py-1.5 text-fuchsia-100">
+                  Resumed from last visit
+                </span>
+              )}
               {!completed && !roundComplete && (
                 <span className="rounded-full border border-white/10 bg-slate-950/50 px-3 py-1.5">
                   Card {progress} of {roundSize}
@@ -499,7 +685,7 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
               )}
             </div>
           </div>
-        ) : (
+        ) : mode === "multiple-choice" ? (
           <div className="mt-6 space-y-5">
             <div className="flex flex-wrap items-center gap-3 text-sm text-slate-200">
               <span className="rounded-full border border-white/10 bg-slate-950/50 px-3 py-1.5">
@@ -581,6 +767,123 @@ export function PracticeDeck({ deck }: { deck: PracticeDeckConfig }) {
               </button>
               <span className="self-center text-sm text-slate-300">
                 Current streak: {streak}
+              </span>
+            </div>
+
+            <div className="xl:hidden">
+              <button
+                type="button"
+                onClick={() => setShowMobileStats((v) => !v)}
+                className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-indigo-50 transition hover:border-white/40 hover:bg-white/10"
+              >
+                {showMobileStats ? "Hide stats & help ▲" : "Stats & help ▼"}
+              </button>
+              {showMobileStats && (
+                <div className="mt-4">
+                  <SidebarContent />
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="mt-6 space-y-5">
+            <div className="flex flex-wrap items-center gap-3 text-sm text-slate-200">
+              <span className="rounded-full border border-white/10 bg-slate-950/50 px-3 py-1.5">
+                Attempts: {typedAttempts}
+              </span>
+              <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1.5 text-emerald-100">
+                Correct: {typedCorrect}
+              </span>
+              <span className="rounded-full border border-sky-300/20 bg-sky-300/10 px-3 py-1.5 text-sky-100">
+                Accuracy: {typedAccuracy}%
+              </span>
+              <span className="rounded-full border border-fuchsia-300/20 bg-fuchsia-300/10 px-3 py-1.5 text-fuchsia-100">
+                Best streak: {typedBestStreak}
+              </span>
+            </div>
+
+            <div className="rounded-[2rem] border border-white/10 bg-[linear-gradient(160deg,rgba(15,23,42,0.95),rgba(30,41,59,0.85))] p-6 lg:p-8">
+              <p className="text-[11px] uppercase tracking-[0.26em] text-indigo-200">Prompt</p>
+              <h3 className="mt-4 text-2xl font-semibold text-white lg:text-4xl">
+                {deck.questionPrompt(typedCard)}
+              </h3>
+
+              <form onSubmit={handleTypedSubmit} className="mt-8">
+                <label
+                  htmlFor="typed-answer"
+                  className="text-[11px] uppercase tracking-[0.24em] text-slate-300"
+                >
+                  {deck.answerLabel}
+                </label>
+                <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+                  <input
+                    ref={typedInputRef}
+                    id="typed-answer"
+                    type="text"
+                    value={guess}
+                    onChange={(event) => setGuess(event.target.value)}
+                    readOnly={typedPhase === "judged"}
+                    placeholder="Type your response…"
+                    autoComplete="off"
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    className="w-full rounded-[1.25rem] border border-white/15 bg-black/30 px-5 py-3.5 text-lg text-white placeholder:text-slate-400/60 focus:border-emerald-300/60 focus:outline-none"
+                  />
+                  <button
+                    type="submit"
+                    className="shrink-0 rounded-full bg-emerald-300 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-200"
+                  >
+                    {typedPhase === "answering" ? "Submit" : "Next question →"}
+                    <span className="ml-2 text-xs opacity-60">Enter</span>
+                  </button>
+                </div>
+              </form>
+
+              {typedPhase === "judged" && (
+                <div
+                  aria-live="polite"
+                  className={`mt-6 rounded-[1.5rem] border px-4 py-4 text-sm ${
+                    typedVerdict === "correct"
+                      ? "border-emerald-300/30 bg-emerald-300/10 text-emerald-50"
+                      : "border-rose-300/30 bg-rose-300/10 text-rose-50"
+                  }`}
+                >
+                  {typedVerdict === "correct"
+                    ? deck.correctFeedback(typedCard)
+                    : deck.incorrectFeedback(typedCard)}
+                  {typedVerdict === "incorrect" && guess.trim().length > 0 && (
+                    <button
+                      type="button"
+                      onClick={overrideTypedCorrect}
+                      className="mt-3 block rounded-full border border-white/20 px-4 py-1.5 text-xs font-semibold text-rose-50 transition hover:border-white/45 hover:bg-white/10"
+                    >
+                      My answer was actually right
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              {typedPhase === "answering" && (
+                <button
+                  type="button"
+                  onClick={skipTyped}
+                  className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-indigo-50 transition hover:border-white/40 hover:bg-white/10"
+                >
+                  Show answer
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={resetTyped}
+                className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-indigo-50 transition hover:border-white/40 hover:bg-white/10"
+              >
+                Reset score
+              </button>
+              <span className="self-center text-sm text-slate-300">
+                Current streak: {typedStreak}
               </span>
             </div>
 
