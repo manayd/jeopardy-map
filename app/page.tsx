@@ -549,6 +549,12 @@ export default function Home() {
                 </div>
                 <div className="flex flex-wrap gap-3">
                   <Link
+                    href="/daily"
+                    className="rounded-full bg-amber-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-amber-200"
+                  >
+                    Play the Daily 10
+                  </Link>
+                  <Link
                     href="/practice"
                     className="rounded-full bg-emerald-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-200"
                   >

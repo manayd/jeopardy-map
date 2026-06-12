@@ -60,6 +60,33 @@ function shuffleMultiplier(seed: number): number {
   return s * 65536 + 32769;
 }
 
+/**
+ * A seed-deterministic sample of the ENTIRE archive (not just tree-linked
+ * categories). Clues referencing on-screen media ("seen here", audio/video
+ * markers) are excluded since they're unanswerable as text.
+ */
+export function getDailyClues(seed: number, limit: number): ClueRow[] {
+  return getClueDb()
+    .prepare(
+      `SELECT clues.prompt, clues.answer, clues.round, clues.value,
+              clues.daily_double_value, clues.air_date,
+              categories.title AS category
+       FROM clues
+       JOIN categories ON categories.id = clues.category_id
+       WHERE clues.prompt NOT LIKE '%seen here%'
+         AND clues.prompt NOT LIKE '%heard here%'
+         AND clues.prompt NOT LIKE '%shown here%'
+         AND clues.prompt NOT LIKE '%pictured%'
+         AND clues.prompt NOT LIKE '%this clip%'
+         AND clues.prompt NOT LIKE '%audio clue%'
+         AND clues.prompt NOT LIKE '%video clue%'
+         AND clues.prompt NOT LIKE '%[%'
+       ORDER BY (clues.id * ${shuffleMultiplier(seed)}) % 4294967296
+       LIMIT ?`,
+    )
+    .all(limit) as ClueRow[];
+}
+
 export function getCluesForCategories(
   categoryIds: string[],
   options: { limit: number; offset: number; seed?: number },

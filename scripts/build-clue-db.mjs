@@ -20,6 +20,11 @@ const outputPath = process.argv[3] ?? "data/processed/clues.db";
 
 const normalize = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
 
+// The TSV escapes embedded quotes as \" (and a few \'). Unescape for stored
+// text — but NOT for the category string fed into categoryId(), which must
+// hash the raw form to keep ids aligned with topics.json from the ingest.
+const unescapeTsv = (value) => value.replace(/\\(["'])/g, "$1");
+
 const parseIntSafe = (value) => {
   const parsed = parseInt(String(value ?? "").replace(/[^0-9-]/g, ""), 10);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -104,8 +109,8 @@ for await (const line of rl) {
   const row = Object.fromEntries(headers.map((key, idx) => [key, parts[idx]]));
 
   const category = normalize(row.category);
-  const prompt = normalize(row.answer);
-  const answer = normalize(row.question);
+  const prompt = unescapeTsv(normalize(row.answer));
+  const answer = unescapeTsv(normalize(row.question));
   if (!category || !prompt || !answer) {
     skipped += 1;
     continue;
@@ -113,7 +118,7 @@ for await (const line of rl) {
 
   let cat = categories.get(category);
   if (!cat) {
-    cat = { id: categoryId(category), title: category, count: 0 };
+    cat = { id: categoryId(category), title: unescapeTsv(category), count: 0 };
     categories.set(category, cat);
   }
   cat.count += 1;
