@@ -9,7 +9,12 @@
  * attempts, misses, and last-seen timestamps.
  */
 
-export type JudgmentMode = "flashcards" | "multiple-choice" | "typed" | "daily";
+export type JudgmentMode =
+  | "flashcards"
+  | "multiple-choice"
+  | "typed"
+  | "daily"
+  | "review";
 
 export type CardStat = {
   prompt: string;
@@ -17,6 +22,10 @@ export type CardStat = {
   attempts: number;
   misses: number;
   last: number;
+  /** Leitner box 1-5; missing on records from before scheduling existed. */
+  box?: number;
+  /** Timestamp when this card is due for review. */
+  due?: number;
 };
 
 export type ModeStat = {
@@ -37,8 +46,20 @@ export type DeckStats = {
 
 const PREFIX = "jeopardy-map:stats:";
 const MAX_CARDS_PER_DECK = 400;
-const PROMPT_SNIPPET = 110;
-const ANSWER_SNIPPET = 70;
+// Stored prompt/answer must be long enough to re-drill the card from the
+// review queue (the answer also feeds the fuzzy judge there).
+const PROMPT_SNIPPET = 280;
+const ANSWER_SNIPPET = 120;
+
+/** Leitner intervals in days, indexed by box-1. Miss → box 1, correct → up. */
+const BOX_INTERVALS_DAYS = [1, 3, 7, 14, 30];
+const DAY_MS = 86_400_000;
+
+function reschedule(card: CardStat, correct: boolean, now: number) {
+  const box = correct ? Math.min((card.box ?? 1) + 1, BOX_INTERVALS_DAYS.length) : 1;
+  card.box = box;
+  card.due = now + BOX_INTERVALS_DAYS[box - 1] * DAY_MS;
+}
 
 function cardKey(prompt: string): string {
   let hash = 2166136261;
@@ -85,6 +106,12 @@ export function recordJudgment(input: {
   prompt: string;
   answer: string;
   correct: boolean;
+  /**
+   * Explicit card key. The review queue re-records judgments from STORED
+   * (truncated) prompts whose hash differs from the original — passing the
+   * stored key keeps the judgment on the same card instead of forking it.
+   */
+  key?: string;
 }) {
   if (typeof window === "undefined") return;
   const now = Date.now();
@@ -109,7 +136,7 @@ export function recordJudgment(input: {
   if (input.correct) modeStat.correct += 1;
   stats.byMode[input.mode] = modeStat;
 
-  const key = cardKey(input.prompt);
+  const key = input.key ?? cardKey(input.prompt);
   const card = stats.cards[key] ?? {
     prompt: input.prompt.slice(0, PROMPT_SNIPPET),
     answer: input.answer.slice(0, ANSWER_SNIPPET),
@@ -120,6 +147,7 @@ export function recordJudgment(input: {
   card.attempts += 1;
   if (!input.correct) card.misses += 1;
   card.last = now;
+  reschedule(card, input.correct, now);
   stats.cards[key] = card;
   pruneCards(stats.cards);
 
@@ -134,6 +162,7 @@ export function amendJudgmentToCorrect(input: {
   slug: string;
   mode: JudgmentMode;
   prompt: string;
+  key?: string;
 }) {
   if (typeof window === "undefined") return;
   const stats = loadDeckStats(input.slug);
@@ -143,8 +172,13 @@ export function amendJudgmentToCorrect(input: {
   const modeStat = stats.byMode[input.mode];
   if (modeStat) modeStat.correct += 1;
 
-  const card = stats.cards[cardKey(input.prompt)];
-  if (card && card.misses > 0) card.misses -= 1;
+  const card = stats.cards[input.key ?? cardKey(input.prompt)];
+  if (card) {
+    if (card.misses > 0) card.misses -= 1;
+    // The miss sent this card to box 1; the answer was actually right, so
+    // promote it as a correct answer would have (from wherever box 1 is).
+    reschedule(card, true, Date.now());
+  }
 
   saveDeckStats(stats);
 }
@@ -163,6 +197,52 @@ export function loadAllDeckStats(): DeckStats[] {
     return out;
   }
   return out;
+}
+
+export type DueCard = {
+  deckSlug: string;
+  deckTitle: string;
+  key: string;
+  prompt: string;
+  answer: string;
+  box: number;
+  due: number;
+  attempts: number;
+  misses: number;
+};
+
+/** All scheduled cards now due, most overdue first. */
+export function loadDueCards(now = Date.now()): DueCard[] {
+  const out: DueCard[] = [];
+  for (const deck of loadAllDeckStats()) {
+    for (const [key, card] of Object.entries(deck.cards)) {
+      if (card.due === undefined || card.due > now) continue;
+      out.push({
+        deckSlug: deck.slug,
+        deckTitle: deck.title,
+        key,
+        prompt: card.prompt,
+        answer: card.answer,
+        box: card.box ?? 1,
+        due: card.due,
+        attempts: card.attempts,
+        misses: card.misses,
+      });
+    }
+  }
+  return out.sort((a, b) => a.due - b.due);
+}
+
+/** Timestamp of the next scheduled review after `now`, or null if none. */
+export function nextDueAt(now = Date.now()): number | null {
+  let next: number | null = null;
+  for (const deck of loadAllDeckStats()) {
+    for (const card of Object.values(deck.cards)) {
+      if (card.due === undefined || card.due <= now) continue;
+      if (next === null || card.due < next) next = card.due;
+    }
+  }
+  return next;
 }
 
 /** Raw serialized form of all stats keys — stable snapshot for useSyncExternalStore. */

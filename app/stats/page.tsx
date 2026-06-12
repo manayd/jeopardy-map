@@ -72,7 +72,7 @@ export default function StatsPage() {
       correct += deck.correct;
       for (const [mode, stat] of Object.entries(deck.byMode)) {
         const bucket =
-          mode === "typed" || mode === "daily"
+          mode === "typed" || mode === "daily" || mode === "review"
             ? recall
             : mode === "multiple-choice"
               ? recognition
@@ -119,7 +119,19 @@ export default function StatsPage() {
     "multiple-choice": "Multiple choice",
     typed: "Typed",
     daily: "Daily 10",
+    review: "Review",
   };
+
+  const dueCount = useMemo(() => {
+    const now = Date.now();
+    let count = 0;
+    for (const deck of decks) {
+      for (const card of Object.values(deck.cards)) {
+        if (card.due !== undefined && card.due <= now) count += 1;
+      }
+    }
+    return count;
+  }, [decks]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-slate-50">
@@ -186,6 +198,25 @@ export default function StatsPage() {
                 </p>
               )}
           </section>
+
+          {dueCount > 0 && (
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-[2rem] border border-amber-300/30 bg-amber-300/10 p-6">
+              <div>
+                <p className="font-semibold text-amber-100">
+                  {dueCount} card{dueCount === 1 ? "" : "s"} due for review
+                </p>
+                <p className="mt-1 text-sm text-amber-100/70">
+                  Spaced repetition only works if the reps happen.
+                </p>
+              </div>
+              <Link
+                href="/review"
+                className="rounded-full bg-amber-300 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-amber-200"
+              >
+                Start review →
+              </Link>
+            </div>
+          )}
 
           {decks.length === 0 ? (
             <div className="mt-6 rounded-[2rem] border border-white/10 bg-white/6 p-8 text-slate-200">

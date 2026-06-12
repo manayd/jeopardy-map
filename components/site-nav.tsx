@@ -1,13 +1,14 @@
 import Link from "next/link";
 
 type SiteNavProps = {
-  current?: "map" | "practice" | "daily" | "stats" | "about";
+  current?: "map" | "practice" | "daily" | "review" | "stats" | "about";
 };
 
 const links = [
   { href: "/", label: "Map", key: "map" },
   { href: "/practice", label: "Practice", key: "practice" },
   { href: "/daily", label: "Daily 10", key: "daily" },
+  { href: "/review", label: "Review", key: "review" },
   { href: "/stats", label: "Stats", key: "stats" },
   { href: "/about", label: "About", key: "about" },
 ] as const;
