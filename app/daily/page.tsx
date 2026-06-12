@@ -14,6 +14,7 @@ import {
   type DailyAnswer,
   type DailyStreak,
 } from "@/lib/daily-quiz";
+import { amendJudgmentToCorrect, recordJudgment } from "@/lib/practice-stats";
 
 type DailyClue = {
   prompt: string;
@@ -101,6 +102,14 @@ export default function DailyQuizPage() {
   };
 
   const commitVerdict = (verdict: "correct" | "incorrect") => {
+    recordJudgment({
+      slug: "daily",
+      title: "The Daily 10",
+      mode: "daily",
+      prompt: currentClue.prompt,
+      answer: currentClue.answer,
+      correct: verdict === "correct",
+    });
     const nextAnswers = [...answers, { guess: guess.trim(), verdict }];
     setAnswers(nextAnswers);
     setPhase("judged");
@@ -125,6 +134,11 @@ export default function DailyQuizPage() {
 
   const overrideCorrect = () => {
     if (phase !== "judged" || !lastAnswer || lastAnswer.verdict === "correct") return;
+    amendJudgmentToCorrect({
+      slug: "daily",
+      mode: "daily",
+      prompt: currentClue.prompt,
+    });
     const nextAnswers = [...answers];
     nextAnswers[nextAnswers.length - 1] = { ...lastAnswer, verdict: "correct" };
     setAnswers(nextAnswers);

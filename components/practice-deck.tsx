@@ -9,6 +9,7 @@ import {
   loadFlashcardProgress,
   saveFlashcardProgress,
 } from "@/lib/practice-progress";
+import { amendJudgmentToCorrect, recordJudgment } from "@/lib/practice-stats";
 
 type PracticeMode = "flashcards" | "multiple-choice" | "typed";
 
@@ -140,6 +141,14 @@ export function PracticeDeck({
   const scoreFlashcard = (result: "known" | "review") => {
     if (roundComplete || completed) return;
     setResumed(false);
+    recordJudgment({
+      slug: deck.slug,
+      title: deck.title,
+      mode: "flashcards",
+      prompt: currentCard.prompt,
+      answer: currentCard.answer,
+      correct: result === "known",
+    });
 
     let nextNeedAgain = needAgainQueue;
     if (result === "review") {
@@ -198,6 +207,14 @@ export function PracticeDeck({
   };
 
   const commitTypedVerdict = (verdict: "correct" | "incorrect") => {
+    recordJudgment({
+      slug: deck.slug,
+      title: deck.title,
+      mode: "typed",
+      prompt: typedCard.prompt,
+      answer: typedCard.answer,
+      correct: verdict === "correct",
+    });
     setStreakBeforeJudge(typedStreak);
     setTypedPhase("judged");
     setTypedVerdict(verdict);
@@ -238,6 +255,11 @@ export function PracticeDeck({
   // "Franklin Roosevelt"), so let the user overrule a wrong "incorrect".
   const overrideTypedCorrect = () => {
     if (typedPhase !== "judged" || typedVerdict === "correct") return;
+    amendJudgmentToCorrect({
+      slug: deck.slug,
+      mode: "typed",
+      prompt: typedCard.prompt,
+    });
     setTypedVerdict("correct");
     setTypedCorrect((value) => value + 1);
     const next = streakBeforeJudge + 1;
@@ -260,6 +282,14 @@ export function PracticeDeck({
     if (selectedOption !== null) return;
 
     const isCorrect = option === question.prompt.answer;
+    recordJudgment({
+      slug: deck.slug,
+      title: deck.title,
+      mode: "multiple-choice",
+      prompt: question.prompt.prompt,
+      answer: question.prompt.answer,
+      correct: isCorrect,
+    });
     setSelectedOption(option);
     setAttemptCount((value) => value + 1);
 
