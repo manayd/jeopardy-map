@@ -12,35 +12,25 @@
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
-import crypto from "node:crypto";
 import Database from "better-sqlite3";
+import {
+  categoryId,
+  createClassifier,
+  loadOverrides,
+  loadRules,
+  normalize,
+  parseIntSafe,
+} from "./lib/classify.mjs";
 
 const inputPath = process.argv[2] ?? "jeopardy_clues.tsv";
 const outputPath = process.argv[3] ?? "data/processed/clues.db";
-
-const normalize = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
 
 // The TSV escapes embedded quotes as \" (and a few \'). Unescape for stored
 // text — but NOT for the category string fed into categoryId(), which must
 // hash the raw form to keep ids aligned with topics.json from the ingest.
 const unescapeTsv = (value) => value.replace(/\\(["'])/g, "$1");
 
-const parseIntSafe = (value) => {
-  const parsed = parseInt(String(value ?? "").replace(/[^0-9-]/g, ""), 10);
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
-const slugify = (value) =>
-  normalize(value)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)+/g, "");
-
-const categoryId = (value) => {
-  const slug = slugify(value);
-  const hash = crypto.createHash("sha1").update(value).digest("hex").slice(0, 6);
-  return `cat:${slug}:${hash}`;
-};
+const classifier = createClassifier(loadRules(), loadOverrides());
 
 fs.mkdirSync(path.dirname(outputPath), { recursive: true });
 fs.rmSync(outputPath, { force: true });
@@ -53,7 +43,10 @@ db.exec(`
   CREATE TABLE categories (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
-    clue_count INTEGER NOT NULL DEFAULT 0
+    clue_count INTEGER NOT NULL DEFAULT 0,
+    topic_id TEXT NOT NULL DEFAULT 'misc',
+    subtopic_id TEXT NOT NULL DEFAULT '',
+    group_id TEXT NOT NULL DEFAULT ''
   );
   CREATE TABLE clues (
     id INTEGER PRIMARY KEY,
@@ -118,7 +111,15 @@ for await (const line of rl) {
 
   let cat = categories.get(category);
   if (!cat) {
-    cat = { id: categoryId(category), title: unescapeTsv(category), count: 0 };
+    const assignment = classifier.assign(category);
+    cat = {
+      id: categoryId(category),
+      title: unescapeTsv(category),
+      count: 0,
+      topicId: assignment.topicId,
+      subtopicId: assignment.subtopicId,
+      groupId: assignment.groupId,
+    };
     categories.set(category, cat);
   }
   cat.count += 1;
@@ -138,15 +139,21 @@ for await (const line of rl) {
 flush();
 
 const insertCategory = db.prepare(
-  "INSERT INTO categories (id, title, clue_count) VALUES (?, ?, ?)",
+  `INSERT INTO categories (id, title, clue_count, topic_id, subtopic_id, group_id)
+   VALUES (?, ?, ?, ?, ?, ?)`,
 );
 db.transaction(() => {
   for (const cat of categories.values()) {
-    insertCategory.run(cat.id, cat.title, cat.count);
+    insertCategory.run(cat.id, cat.title, cat.count, cat.topicId, cat.subtopicId, cat.groupId);
   }
 })();
 
-db.exec("CREATE INDEX idx_clues_category ON clues(category_id);");
+db.exec(`
+  CREATE INDEX idx_clues_category ON clues(category_id);
+  CREATE INDEX idx_categories_topic ON categories(topic_id);
+  CREATE INDEX idx_categories_subtopic ON categories(subtopic_id);
+  CREATE INDEX idx_categories_group ON categories(group_id);
+`);
 db.pragma("optimize");
 // Leave the file in rollback-journal mode so readonly consumers don't need
 // to create -wal/-shm sidecar files.

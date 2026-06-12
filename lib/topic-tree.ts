@@ -49,19 +49,3 @@ export function findTopic(topic: TreeTopic, id: string): TreeTopic | null {
   }
   return null;
 }
-
-/** Category ids (cat:*) of all leaf categories under a topic node. */
-export function collectCategoryIds(topic: TreeTopic): string[] {
-  const ids: string[] = [];
-  const walk = (node: TreeTopic) => {
-    for (const child of node.children ?? []) {
-      if (child.id.startsWith("cat:")) {
-        ids.push(child.id);
-      } else {
-        walk(child);
-      }
-    }
-  };
-  walk(topic);
-  return ids;
-}

@@ -29,7 +29,6 @@
 !/data/processed/
 /data/processed/*
 !/data/processed/topics.json
-!/data/processed/clues.json
 !/data/processed/meta.json
 !/data/processed/validation.json
 /data/processed/categories.json
@@ -50,3 +49,4 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.gstack/

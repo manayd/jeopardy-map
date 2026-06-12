@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
-import {
-  countCluesForCategories,
-  getCategory,
-  getCluesForCategories,
-} from "@/lib/clue-db";
-import { collectCategoryIds, findTopic, loadTopicTree } from "@/lib/topic-tree";
+import { countCluesForNode, getCategory, getCluesForNode } from "@/lib/clue-db";
+import { findTopic, loadTopicTree } from "@/lib/topic-tree";
 
 const parseLimit = (value: string | null, fallback: number, max: number) => {
   const parsed = Number(value);
@@ -39,7 +35,6 @@ export async function GET(
     const seed = parseSeed(url.searchParams.get("seed"));
 
     let title: string;
-    let categoryIds: string[];
 
     if (id.startsWith("cat:")) {
       const category = getCategory(id);
@@ -47,7 +42,6 @@ export async function GET(
         return NextResponse.json({ error: "Category not found." }, { status: 404 });
       }
       title = category.title;
-      categoryIds = [id];
     } else {
       const tree = await loadTopicTree();
       const topic = findTopic(tree, id);
@@ -55,11 +49,10 @@ export async function GET(
         return NextResponse.json({ error: "Topic not found." }, { status: 404 });
       }
       title = topic.title;
-      categoryIds = collectCategoryIds(topic);
     }
 
-    const total = countCluesForCategories(categoryIds);
-    const clues = getCluesForCategories(categoryIds, { limit, offset, seed });
+    const total = countCluesForNode(id);
+    const clues = getCluesForNode(id, { limit, offset, seed });
 
     return NextResponse.json({ id, title, total, offset, limit, clues });
   } catch {

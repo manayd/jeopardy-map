@@ -40,12 +40,40 @@ export function getCategory(id: string): CategoryRow | undefined {
     .get(id) as CategoryRow | undefined;
 }
 
-export function countCluesForCategories(categoryIds: string[]): number {
-  if (!categoryIds.length) return 0;
-  const placeholders = categoryIds.map(() => "?").join(",");
+/**
+ * Every category row carries its topic/subtopic/group assignment, so any
+ * tree node maps to a simple WHERE clause — the full archive is reachable
+ * from every node, not just the capped category lists in topics.json.
+ */
+type NodeFilter = {
+  clause: string;
+  params: string[];
+};
+
+function filterForNode(nodeId: string): NodeFilter {
+  if (nodeId === "root") return { clause: "", params: [] };
+  if (nodeId.startsWith("cat:")) {
+    return { clause: "WHERE clues.category_id = ?", params: [nodeId] };
+  }
+  if (nodeId.startsWith("sub:")) {
+    return { clause: "WHERE categories.subtopic_id = ?", params: [nodeId] };
+  }
+  if (nodeId.startsWith("grp:")) {
+    return { clause: "WHERE categories.group_id = ?", params: [nodeId] };
+  }
+  return { clause: "WHERE categories.topic_id = ?", params: [nodeId] };
+}
+
+export function countCluesForNode(nodeId: string): number {
+  const { clause, params } = filterForNode(nodeId);
   const row = getClueDb()
-    .prepare(`SELECT COUNT(*) AS n FROM clues WHERE category_id IN (${placeholders})`)
-    .get(...categoryIds) as { n: number };
+    .prepare(
+      `SELECT COUNT(*) AS n
+       FROM clues
+       JOIN categories ON categories.id = clues.category_id
+       ${clause}`,
+    )
+    .get(...params) as { n: number };
   return row.n;
 }
 
@@ -87,12 +115,11 @@ export function getDailyClues(seed: number, limit: number): ClueRow[] {
     .all(limit) as ClueRow[];
 }
 
-export function getCluesForCategories(
-  categoryIds: string[],
+export function getCluesForNode(
+  nodeId: string,
   options: { limit: number; offset: number; seed?: number },
 ): ClueRow[] {
-  if (!categoryIds.length) return [];
-  const placeholders = categoryIds.map(() => "?").join(",");
+  const { clause, params } = filterForNode(nodeId);
   const orderBy =
     options.seed !== undefined
       ? `(clues.id * ${shuffleMultiplier(options.seed)}) % 4294967296`
@@ -104,9 +131,9 @@ export function getCluesForCategories(
               categories.title AS category
        FROM clues
        JOIN categories ON categories.id = clues.category_id
-       WHERE clues.category_id IN (${placeholders})
+       ${clause}
        ORDER BY ${orderBy}
        LIMIT ? OFFSET ?`,
     )
-    .all(...categoryIds, options.limit, options.offset) as ClueRow[];
+    .all(...params, options.limit, options.offset) as ClueRow[];
 }

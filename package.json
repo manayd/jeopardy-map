@@ -9,6 +9,9 @@
     "lint": "eslint",
     "ingest": "node scripts/ingest-jeopardy.mjs",
     "db:build": "node scripts/build-clue-db.mjs",
+    "overrides:auto": "node scripts/generate-auto-overrides.mjs",
+    "tree:prune": "node scripts/prune-topic-tree.mjs",
+    "data:rebuild": "npm run db:build && npm run overrides:auto && npm run ingest && npm run tree:prune && npm run db:build",
     "validate:jeopardy": "node scripts/validate-jeopardy.mjs",
     "tree:topics": "node scripts/print-topic-tree.mjs"
   },
