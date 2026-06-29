@@ -40,6 +40,13 @@ function addDays(date: Date, days: number): Date {
   return d;
 }
 
+/** Parse a "YYYY-MM-DD" key into a local-midnight Date, or null if malformed. */
+function parseLocalDate(iso: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!match) return null;
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
 function tierFor(completed: boolean, score: number): number {
   if (!completed) return 0;
   if (score >= 10) return 4;
@@ -57,29 +64,40 @@ export function DailyHeatmap() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const history = useMemo(() => loadDailyHistory(), [snapshot]);
 
-  // Columns of 7 days (Sun→Sat), ending with the week containing today.
-  const columns = useMemo(() => {
+  // Columns of 7 days (Sun→Sat). The window defaults to ~53 weeks ending
+  // today, but always stretches to cover the earliest and latest day the
+  // user actually has data for — so a stored day is never clipped out by
+  // clock or timezone differences between when it was saved and "now".
+  const { columns, today } = useMemo(() => {
     const today = startOfDay(new Date());
-    const thisSunday = addDays(today, -today.getDay());
-    const start = addDays(thisSunday, -(WEEKS - 1) * 7);
+    let min = addDays(today, -(WEEKS - 1) * 7);
+    let max = today;
+    for (const iso of history.keys()) {
+      const parsed = parseLocalDate(iso);
+      if (!parsed) continue;
+      if (parsed.getTime() < min.getTime()) min = parsed;
+      if (parsed.getTime() > max.getTime()) max = parsed;
+    }
+    const startSunday = addDays(min, -min.getDay());
+    const endSaturday = addDays(max, 6 - max.getDay());
     const cols: Date[][] = [];
-    for (let w = 0; w < WEEKS; w += 1) {
+    for (
+      let cursor = startSunday;
+      cursor.getTime() <= endSaturday.getTime();
+      cursor = addDays(cursor, 7)
+    ) {
       const week: Date[] = [];
-      for (let d = 0; d < 7; d += 1) {
-        week.push(addDays(start, w * 7 + d));
-      }
+      for (let d = 0; d < 7; d += 1) week.push(addDays(cursor, d));
       cols.push(week);
     }
-    return cols;
-    // Recompute after mount so the date axis uses the client's local day.
+    return { columns: cols, today };
+    // Recompute after mount (client date) and whenever history changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mounted]);
+  }, [mounted, history]);
 
   if (!mounted) {
     return <div className="h-44" aria-hidden />;
   }
-
-  const today = startOfDay(new Date());
   const daysCompleted = [...history.values()].filter((d) => d.completed).length;
 
   return (
@@ -127,12 +145,13 @@ export function DailyHeatmap() {
             {columns.map((week, w) => (
               <div key={w} className="flex flex-col gap-[3px]">
                 {week.map((date) => {
-                  const inFuture = date.getTime() > today.getTime();
-                  if (inFuture) {
-                    return <div key={date.getTime()} className="h-3 w-3" />;
-                  }
                   const iso = localDateString(date);
                   const day = history.get(iso);
+                  // Hide only empty future cells (the rest of the current
+                  // week). A future-dated day that has data still renders.
+                  if (date.getTime() > today.getTime() && !day) {
+                    return <div key={date.getTime()} className="h-3 w-3" />;
+                  }
                   const tier = tierFor(Boolean(day?.completed), day?.score ?? 0);
                   const label = day?.completed
                     ? `${WEEKDAY_NAMES[date.getDay()]}, ${MONTH_NAMES[date.getMonth()]} ${date.getDate()}: ${day.score}/10`
