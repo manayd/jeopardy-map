@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import Link from "next/link";
+import { DailyHeatmap } from "@/components/daily-heatmap";
 import { SiteNav } from "@/components/site-nav";
 import { judgeAnswer } from "@/lib/answer-match";
 import {
@@ -345,6 +346,10 @@ export default function DailyQuizPage() {
               </div>
             )}
           </div>
+
+          <section className="mt-6 rounded-[2rem] border border-white/10 bg-white/6 p-6 shadow-2xl shadow-black/30 backdrop-blur-xl lg:p-8">
+            <DailyHeatmap />
+          </section>
         </main>
       </div>
     </div>

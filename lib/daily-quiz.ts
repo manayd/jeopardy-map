@@ -39,6 +39,57 @@ export function loadDailyResult(date: string): DailyResult | null {
   }
 }
 
+export type DailyDay = {
+  date: string;
+  score: number;
+  total: number;
+  completed: boolean;
+};
+
+const DAILY_QUIZ_SIZE = 10;
+
+/** One entry per day the user has any saved Daily 10 result for. */
+export function loadDailyHistory(): Map<string, DailyDay> {
+  const out = new Map<string, DailyDay>();
+  if (typeof window === "undefined") return out;
+  try {
+    for (let i = 0; i < window.localStorage.length; i += 1) {
+      const key = window.localStorage.key(i);
+      if (!key?.startsWith(RESULT_PREFIX)) continue;
+      const date = key.slice(RESULT_PREFIX.length);
+      const result = loadDailyResult(date);
+      if (!result) continue;
+      const score = result.answers.filter((a) => a.verdict === "correct").length;
+      const total = result.answers.length;
+      out.set(date, {
+        date,
+        score,
+        total,
+        completed: Boolean(result.completedAt) || total >= DAILY_QUIZ_SIZE,
+      });
+    }
+  } catch {
+    return out;
+  }
+  return out;
+}
+
+/** Stable serialized form of the daily history, for useSyncExternalStore. */
+export function dailyHistorySnapshot(): string {
+  if (typeof window === "undefined") return "";
+  const parts: string[] = [];
+  try {
+    for (let i = 0; i < window.localStorage.length; i += 1) {
+      const key = window.localStorage.key(i);
+      if (!key?.startsWith(RESULT_PREFIX)) continue;
+      parts.push(`${key}=${window.localStorage.getItem(key) ?? ""}`);
+    }
+  } catch {
+    return "";
+  }
+  return parts.sort().join("\n");
+}
+
 export function saveDailyResult(result: DailyResult) {
   if (typeof window === "undefined") return;
   try {
