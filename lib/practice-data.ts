@@ -10,6 +10,11 @@ export type PracticeTopic = {
 export type PracticeCard = {
   prompt: string;
   answer: string;
+  // Optional Jeopardy metadata, present on clue-based decks (topic decks,
+  // the Daily 10). Curated decks like World Capitals leave these unset.
+  category?: string;
+  value?: number;
+  round?: number;
 };
 
 export type PracticeDeckConfig = {

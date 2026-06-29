@@ -26,6 +26,10 @@ export type CardStat = {
   box?: number;
   /** Timestamp when this card is due for review. */
   due?: number;
+  /** Jeopardy metadata, present for clue-based cards (topic decks, Daily 10). */
+  category?: string;
+  value?: number;
+  round?: number;
 };
 
 export type ModeStat = {
@@ -106,6 +110,10 @@ export function recordJudgment(input: {
   prompt: string;
   answer: string;
   correct: boolean;
+  /** Jeopardy metadata for clue-based cards (topic decks, Daily 10). */
+  category?: string;
+  value?: number;
+  round?: number;
   /**
    * Explicit card key. The review queue re-records judgments from STORED
    * (truncated) prompts whose hash differs from the original — passing the
@@ -147,6 +155,10 @@ export function recordJudgment(input: {
   card.attempts += 1;
   if (!input.correct) card.misses += 1;
   card.last = now;
+  // Backfill metadata so older cards pick it up the next time they're seen.
+  if (input.category !== undefined) card.category = input.category;
+  if (input.value !== undefined) card.value = input.value;
+  if (input.round !== undefined) card.round = input.round;
   reschedule(card, input.correct, now);
   stats.cards[key] = card;
   pruneCards(stats.cards);
@@ -209,6 +221,9 @@ export type DueCard = {
   due: number;
   attempts: number;
   misses: number;
+  category?: string;
+  value?: number;
+  round?: number;
 };
 
 /** All scheduled cards now due, most overdue first. */
@@ -227,6 +242,9 @@ export function loadDueCards(now = Date.now()): DueCard[] {
         due: card.due,
         attempts: card.attempts,
         misses: card.misses,
+        category: card.category,
+        value: card.value,
+        round: card.round,
       });
     }
   }

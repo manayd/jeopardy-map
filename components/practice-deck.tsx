@@ -168,6 +168,9 @@ export function PracticeDeck({
       prompt: currentCard.prompt,
       answer: currentCard.answer,
       correct: result === "known",
+      category: currentCard.category,
+      value: currentCard.value,
+      round: currentCard.round,
     });
 
     let nextNeedAgain = needAgainQueue;
@@ -234,6 +237,9 @@ export function PracticeDeck({
       prompt: typedCard.prompt,
       answer: typedCard.answer,
       correct: verdict === "correct",
+      category: typedCard.category,
+      value: typedCard.value,
+      round: typedCard.round,
     });
     setStreakBeforeJudge(typedStreak);
     setTypedPhase("judged");
@@ -309,6 +315,9 @@ export function PracticeDeck({
       prompt: question.prompt.prompt,
       answer: question.prompt.answer,
       correct: isCorrect,
+      category: question.prompt.category,
+      value: question.prompt.value,
+      round: question.prompt.round,
     });
     setSelectedOption(option);
     setAttemptCount((value) => value + 1);

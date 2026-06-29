@@ -110,6 +110,9 @@ export default function DailyQuizPage() {
       prompt: currentClue.prompt,
       answer: currentClue.answer,
       correct: verdict === "correct",
+      category: currentClue.category,
+      value: currentClue.value,
+      round: currentClue.round,
     });
     const nextAnswers = [...answers, { guess: guess.trim(), verdict }];
     setAnswers(nextAnswers);

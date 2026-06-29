@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { FormEvent } from "react";
 import Link from "next/link";
 import { SiteNav } from "@/components/site-nav";
@@ -30,6 +30,29 @@ function formatUntil(ts: number): string {
   return days === 1 ? "tomorrow" : `in ${days} days`;
 }
 
+// Mirrors the Leitner ladder in practice-stats: box N's interval in days.
+const BOX_INTERVAL_DAYS = [1, 3, 7, 14, 30];
+
+/** When a correctly-recalled card in `box` will next come due. */
+function nextIntervalLabel(box: number): string {
+  const nextBox = Math.min(box + 1, BOX_INTERVAL_DAYS.length);
+  const days = BOX_INTERVAL_DAYS[nextBox - 1];
+  if (days === 1) return "Back tomorrow";
+  if (days < 7) return `Back in ${days} days`;
+  if (days === 7) return "Back in 1 week";
+  if (days < 30) return `Back in ${Math.round(days / 7)} weeks`;
+  return "Back in a month";
+}
+
+/** "OPERA SETTINGS · $400" style context line for a clue-based card. */
+function clueContext(card: { category?: string; value?: number; round?: number }): string {
+  const parts: string[] = [];
+  if (card.category) parts.push(card.category);
+  if (card.round === 3) parts.push("Final Jeopardy!");
+  else if (card.value && card.value > 0) parts.push(`$${card.value}`);
+  return parts.join(" · ");
+}
+
 export default function ReviewPage() {
   // Live snapshot drives the landing screen; the session itself is captured
   // once on "Start" so answering cards doesn't reshuffle the queue mid-run.
@@ -47,6 +70,7 @@ export default function ReviewPage() {
   const [phase, setPhase] = useState<"answering" | "judged">("answering");
   const [verdict, setVerdict] = useState<"correct" | "incorrect">("incorrect");
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const advanceRef = useRef<HTMLButtonElement | null>(null);
 
   const startSession = () => {
     setSession(loadDueCards().slice(0, SESSION_CAP));
@@ -83,7 +107,6 @@ export default function ReviewPage() {
       setIndex((value) => value + 1);
       setGuess("");
       setPhase("answering");
-      setTimeout(() => inputRef.current?.focus(), 0);
       return;
     }
     if (!guess.trim()) return;
@@ -105,6 +128,30 @@ export default function ReviewPage() {
   const skipCard = () => {
     if (phase === "answering") commitVerdict("incorrect");
   };
+
+  // Move focus to follow the phase: the input while answering, the advance
+  // button once judged. This is what makes Enter work after a wrong answer or
+  // an "I don't know" — otherwise focus is left on a button that unmounts and
+  // the keypress never reaches the form.
+  useEffect(() => {
+    if (!session || index >= total) return;
+    if (phase === "answering") inputRef.current?.focus();
+    else advanceRef.current?.focus();
+  }, [phase, index, session, total]);
+
+  // Escape gives "I don't know" a keyboard shortcut without clashing with
+  // typing the answer (Enter is taken by submit/advance).
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && phase === "answering" && card) {
+        event.preventDefault();
+        skipCard();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, card]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-slate-50">
@@ -225,6 +272,9 @@ export default function ReviewPage() {
                     >
                       {card.deckTitle}
                     </Link>
+                    {clueContext(card) && (
+                      <span className="text-indigo-200/70">· {clueContext(card)}</span>
+                    )}
                   </div>
                   <h2 className="mt-4 text-2xl font-semibold leading-snug text-white lg:text-3xl">
                     {card.prompt}
@@ -254,6 +304,7 @@ export default function ReviewPage() {
                         className="w-full rounded-[1.25rem] border border-white/15 bg-black/30 px-5 py-3.5 text-lg text-white placeholder:text-slate-400/60 focus:border-emerald-300/60 focus:outline-none"
                       />
                       <button
+                        ref={advanceRef}
                         type="submit"
                         className="shrink-0 rounded-full bg-emerald-300 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-200"
                       >
@@ -276,9 +327,25 @@ export default function ReviewPage() {
                           : "border-rose-300/30 bg-rose-300/10 text-rose-50"
                       }`}
                     >
-                      {verdict === "correct"
-                        ? `Correct — ${card.answer}. Moving to a longer interval.`
-                        : `The correct response: ${card.answer}. Back tomorrow.`}
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <span className="font-medium">
+                          {verdict === "correct"
+                            ? `Correct — ${card.answer}`
+                            : `The correct response: ${card.answer}`}
+                        </span>
+                        <span
+                          className={`shrink-0 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide ${
+                            verdict === "correct"
+                              ? "border-emerald-300/40 bg-emerald-300/10 text-emerald-100"
+                              : "border-amber-300/40 bg-amber-300/10 text-amber-100"
+                          }`}
+                          title="When this card returns to your review queue"
+                        >
+                          {verdict === "correct"
+                            ? nextIntervalLabel(card.box)
+                            : "Back tomorrow"}
+                        </span>
+                      </div>
                       {verdict === "incorrect" && guess.trim().length > 0 && (
                         <button
                           type="button"
@@ -299,6 +366,7 @@ export default function ReviewPage() {
                     className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-indigo-50 transition hover:border-white/40 hover:bg-white/10"
                   >
                     I don&rsquo;t know — show answer
+                    <span className="ml-2 text-xs opacity-60">Esc</span>
                   </button>
                 )}
               </div>

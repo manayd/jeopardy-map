@@ -13,6 +13,9 @@ type ClueResponse = {
   clues: Array<{
     prompt?: string;
     answer?: string;
+    category?: string;
+    value?: number;
+    round?: number;
   }>;
 };
 
@@ -59,7 +62,13 @@ function buildTopicDeck(topicId: string, data: ClueResponse): PracticeDeckConfig
     const key = `${prompt}::${answer}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    items.push({ prompt, answer });
+    items.push({
+      prompt,
+      answer,
+      category: clue.category,
+      value: clue.value,
+      round: clue.round,
+    });
   }
 
   return {
