@@ -14,8 +14,31 @@ export type FlashcardProgress = {
 };
 
 const STORAGE_PREFIX = "jeopardy-map:practice:";
+const DIRECTION_PREFIX = "jeopardy-map:flash-dir:";
 
 export const flashcardProgressKey = (slug: string) => `${STORAGE_PREFIX}${slug}`;
+
+export type FlashDirection = "forward" | "reverse";
+
+export function loadFlashDirection(slug: string): FlashDirection {
+  if (typeof window === "undefined") return "forward";
+  try {
+    return window.localStorage.getItem(`${DIRECTION_PREFIX}${slug}`) === "reverse"
+      ? "reverse"
+      : "forward";
+  } catch {
+    return "forward";
+  }
+}
+
+export function saveFlashDirection(slug: string, direction: FlashDirection) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(`${DIRECTION_PREFIX}${slug}`, direction);
+  } catch {
+    // direction just won't persist; flashcards still flip for this session
+  }
+}
 
 export function parseFlashcardProgress(raw: string | null): FlashcardProgress | null {
   if (!raw) return null;

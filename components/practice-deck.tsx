@@ -7,7 +7,10 @@ import type { PracticeCard, PracticeDeckConfig } from "@/lib/practice-data";
 import {
   clearFlashcardProgress,
   loadFlashcardProgress,
+  loadFlashDirection,
+  saveFlashDirection,
   saveFlashcardProgress,
+  type FlashDirection,
 } from "@/lib/practice-progress";
 import { amendJudgmentToCorrect, recordJudgment } from "@/lib/practice-stats";
 
@@ -81,6 +84,7 @@ export function PracticeDeck({
   const [showAnswer, setShowAnswer] = useState(false);
   const [resumed, setResumed] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
+  const [flashDirection, setFlashDirection] = useState<FlashDirection>("forward");
   const [question, setQuestion] = useState(() => buildQuestion(items));
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [correctCount, setCorrectCount] = useState(0);
@@ -109,6 +113,16 @@ export function PracticeDeck({
 
   const currentCardIndex = reviewQueue[queueIndex] ?? deckIndices[0];
   const currentCard = items[currentCardIndex] ?? items[0];
+  // Flashcards can flip: in reverse, the answer side becomes the cue and the
+  // prompt side becomes what you recall. Judgments still record against the
+  // canonical card (currentCard.prompt/answer), so direction never forks a
+  // card's stats or spaced-repetition schedule.
+  const reversible = deck.reversible !== false;
+  const reversed = reversible && flashDirection === "reverse";
+  const frontLabel = reversed ? deck.answerLabel : deck.promptLabel;
+  const backLabel = reversed ? deck.promptLabel : deck.answerLabel;
+  const frontText = reversed ? currentCard.answer : currentCard.prompt;
+  const backText = reversed ? currentCard.prompt : currentCard.answer;
   const progress = queueIndex + 1;
   const roundSize = reviewQueue.length;
   const accuracy = attemptCount === 0 ? 0 : Math.round((correctCount / attemptCount) * 100);
@@ -130,6 +144,12 @@ export function PracticeDeck({
     setShowAnswer(false);
     setResumed(false);
     onRestart?.();
+  };
+
+  const setDirection = (direction: FlashDirection) => {
+    setFlashDirection(direction);
+    saveFlashDirection(deck.slug, direction);
+    setShowAnswer(false);
   };
 
   const nextFlashcard = () => {
@@ -356,6 +376,7 @@ export function PracticeDeck({
   // trusted when the deck is the same size it was when progress was written.
   // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
+    if (reversible) setFlashDirection(loadFlashDirection(deck.slug));
     const saved = loadFlashcardProgress(deck.slug);
     if (saved && saved.deckSize === items.length) {
       const validIndex = (index: number) =>
@@ -602,22 +623,59 @@ export function PracticeDeck({
               </div>
             ) : (
               <>
+                {reversible && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs uppercase tracking-[0.2em] text-slate-400">
+                      Direction
+                    </span>
+                    <div
+                      role="group"
+                      aria-label="Flashcard direction"
+                      className="inline-flex rounded-full border border-white/10 bg-slate-950/50 p-1"
+                    >
+                      <button
+                        type="button"
+                        aria-pressed={!reversed}
+                        onClick={() => setDirection("forward")}
+                        className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                          !reversed
+                            ? "bg-emerald-300 text-slate-950"
+                            : "text-slate-200 hover:bg-white/10"
+                        }`}
+                      >
+                        {deck.promptLabel} → {deck.answerLabel}
+                      </button>
+                      <button
+                        type="button"
+                        aria-pressed={reversed}
+                        onClick={() => setDirection("reverse")}
+                        className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                          reversed
+                            ? "bg-emerald-300 text-slate-950"
+                            : "text-slate-200 hover:bg-white/10"
+                        }`}
+                      >
+                        {deck.answerLabel} → {deck.promptLabel}
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <div className="rounded-[2rem] border border-white/10 bg-[linear-gradient(160deg,rgba(15,23,42,0.95),rgba(30,41,59,0.85))] p-6 lg:p-8">
                   <p className="text-[11px] uppercase tracking-[0.26em] text-indigo-200">
-                    {deck.promptLabel}
+                    {frontLabel}
                   </p>
                   <div className="mt-5 text-3xl font-semibold text-white lg:text-5xl">
-                    {currentCard.prompt}
+                    {frontText}
                   </div>
 
                   <div className="mt-8 rounded-[1.5rem] border border-dashed border-white/15 bg-black/20 p-5">
                     <p className="text-[11px] uppercase tracking-[0.24em] text-slate-300">
-                      {deck.answerLabel}
+                      {backLabel}
                     </p>
                     <div aria-live="polite">
                       {showAnswer ? (
                         <p className="mt-3 text-xl leading-relaxed text-emerald-100 lg:text-2xl">
-                          {currentCard.answer}
+                          {backText}
                         </p>
                       ) : (
                         <p className="mt-3 text-lg text-slate-300/70">

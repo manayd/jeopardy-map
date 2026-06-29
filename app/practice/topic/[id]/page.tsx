@@ -79,6 +79,8 @@ function buildTopicDeck(topicId: string, data: ClueResponse): PracticeDeckConfig
     questionPrompt: (item) => item.prompt,
     correctFeedback: (item) => `Correct — ${item.answer}.`,
     incorrectFeedback: (item) => `The correct response was ${item.answer}.`,
+    // A Jeopardy clue can't be recalled from its answer, so don't offer flip.
+    reversible: false,
   };
 }
 

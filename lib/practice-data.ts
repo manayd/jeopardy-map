@@ -23,6 +23,13 @@ export type PracticeDeckConfig = {
   questionPrompt: (item: PracticeCard) => string;
   correctFeedback: (item: PracticeCard) => string;
   incorrectFeedback: (item: PracticeCard) => string;
+  /**
+   * Whether flashcards can flip direction (show the answer side, recall the
+   * prompt). True for paired decks like Country/Capital; false for decks
+   * whose answer is a freeform clue you can't be cued toward (e.g. Jeopardy
+   * topic decks). Defaults to true when omitted.
+   */
+  reversible?: boolean;
 };
 
 function cleanCell(value: string) {
