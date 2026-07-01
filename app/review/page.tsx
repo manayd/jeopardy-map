@@ -7,6 +7,8 @@ import { SiteNav } from "@/components/site-nav";
 import { judgeAnswer } from "@/lib/answer-match";
 import {
   amendJudgmentToCorrect,
+  backfillCardMeta,
+  deckCardsMissingMeta,
   loadDueCards,
   nextDueAt,
   practiceHrefForSlug,
@@ -14,6 +16,7 @@ import {
   statsSnapshot,
   type DueCard,
 } from "@/lib/practice-stats";
+import { loadDailyHistory } from "@/lib/daily-quiz";
 
 const SESSION_CAP = 50;
 
@@ -138,6 +141,43 @@ export default function ReviewPage() {
     if (phase === "answering") inputRef.current?.focus();
     else advanceRef.current?.focus();
   }, [phase, index, session, total]);
+
+  // One-time backfill: Daily 10 cards recorded before category/value were
+  // captured can recover them from the deterministic date-seeded quiz. Run
+  // once per session, only if some daily card is missing metadata.
+  useEffect(() => {
+    if (!deckCardsMissingMeta("daily")) return;
+    if (sessionStorage.getItem("jeopardy-map:daily-backfilled")) return;
+    sessionStorage.setItem("jeopardy-map:daily-backfilled", "1");
+    let cancelled = false;
+    (async () => {
+      const dates = [...loadDailyHistory().keys()].slice(0, 120);
+      for (const date of dates) {
+        if (cancelled) return;
+        try {
+          const res = await fetch(`/api/daily?date=${date}`);
+          if (!res.ok) continue;
+          const data = (await res.json()) as {
+            clues?: Array<{ prompt?: string; category?: string; value?: number; round?: number }>;
+          };
+          backfillCardMeta(
+            "daily",
+            (data.clues ?? []).map((c) => ({
+              prompt: c.prompt ?? "",
+              category: c.category,
+              value: c.value,
+              round: c.round,
+            })),
+          );
+        } catch {
+          // skip this date; a failed fetch shouldn't break review
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Escape gives "I don't know" a keyboard shortcut without clashing with
   // typing the answer (Enter is taken by submit/advance).

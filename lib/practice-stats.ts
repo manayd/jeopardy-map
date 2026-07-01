@@ -251,6 +251,39 @@ export function loadDueCards(now = Date.now()): DueCard[] {
   return out.sort((a, b) => a.due - b.due);
 }
 
+/** True if any card in a deck is missing its Jeopardy metadata. */
+export function deckCardsMissingMeta(slug: string): boolean {
+  const stats = loadDeckStats(slug);
+  if (!stats) return false;
+  return Object.values(stats.cards).some((card) => card.category === undefined);
+}
+
+/**
+ * Fill in category/value/round on stored cards that predate metadata capture,
+ * matching by prompt. Used to backfill Daily 10 cards from the deterministic
+ * date-seeded quiz. Returns how many cards were updated.
+ */
+export function backfillCardMeta(
+  slug: string,
+  entries: Array<{ prompt: string; category?: string; value?: number; round?: number }>,
+): number {
+  if (typeof window === "undefined") return 0;
+  const stats = loadDeckStats(slug);
+  if (!stats) return 0;
+  let updated = 0;
+  for (const entry of entries) {
+    const card = stats.cards[cardKey(entry.prompt)];
+    if (card && card.category === undefined && entry.category !== undefined) {
+      card.category = entry.category;
+      card.value = entry.value;
+      card.round = entry.round;
+      updated += 1;
+    }
+  }
+  if (updated > 0) saveDeckStats(stats);
+  return updated;
+}
+
 /** Timestamp of the next scheduled review after `now`, or null if none. */
 export function nextDueAt(now = Date.now()): number | null {
   let next: number | null = null;
