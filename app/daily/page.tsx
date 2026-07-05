@@ -136,6 +136,20 @@ export default function DailyQuizPage() {
     if (phase === "answering") commitVerdict("incorrect");
   };
 
+  // Escape gives "I don't know" a keyboard shortcut without clashing with
+  // typing the answer (Enter is taken by submit/next).
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && status === "ready" && !done && phase === "answering") {
+        event.preventDefault();
+        skipQuestion();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, done, phase, index]);
+
   const overrideCorrect = () => {
     if (phase !== "judged" || !lastAnswer || lastAnswer.verdict === "correct") return;
     amendJudgmentToCorrect({
@@ -344,6 +358,7 @@ export default function DailyQuizPage() {
                     className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-indigo-50 transition hover:border-white/40 hover:bg-white/10"
                   >
                     I don&rsquo;t know — show answer
+                    <span className="ml-2 text-xs opacity-60">Esc</span>
                   </button>
                 )}
               </div>
