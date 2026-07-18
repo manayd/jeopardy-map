@@ -39,6 +39,12 @@ function clueValueLabel(clue: DailyClue): string {
   return value > 0 ? `${round} · $${value}` : round;
 }
 
+/** Year an episode aired, from a "YYYY-MM-DD" air_date, or "" if unknown. */
+function clueYear(airDate?: string): string {
+  const match = /^(\d{4})/.exec(airDate ?? "");
+  return match ? match[1] : "";
+}
+
 export default function DailyQuizPage() {
   const [date] = useState(() => localDateString());
   const [status, setStatus] = useState<"loading" | "error" | "ready">("loading");
@@ -113,6 +119,7 @@ export default function DailyQuizPage() {
       category: currentClue.category,
       value: currentClue.value,
       round: currentClue.round,
+      airDate: currentClue.air_date,
     });
     const nextAnswers = [...answers, { guess: guess.trim(), verdict }];
     setAnswers(nextAnswers);
@@ -255,6 +262,7 @@ export default function DailyQuizPage() {
                           <span>{correct ? "✓" : "✗"}</span>
                           <span>{clue.category}</span>
                           <span>· {clueValueLabel(clue)}</span>
+                          {clueYear(clue.air_date) && <span>· {clueYear(clue.air_date)}</span>}
                         </div>
                         <p className="mt-2 text-sm leading-relaxed text-slate-100">
                           {clue.prompt}
@@ -285,6 +293,9 @@ export default function DailyQuizPage() {
                   <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.24em] text-indigo-200">
                     <span>{currentClue.category}</span>
                     <span className="text-indigo-200/60">· {clueValueLabel(currentClue)}</span>
+                    {clueYear(currentClue.air_date) && (
+                      <span className="text-indigo-200/60">· {clueYear(currentClue.air_date)}</span>
+                    )}
                   </div>
                   <h2 className="mt-4 text-2xl font-semibold leading-snug text-white lg:text-3xl">
                     {currentClue.prompt}

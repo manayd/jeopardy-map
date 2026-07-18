@@ -16,6 +16,7 @@ type ClueResponse = {
     category?: string;
     value?: number;
     round?: number;
+    air_date?: string;
   }>;
 };
 
@@ -68,6 +69,7 @@ function buildTopicDeck(topicId: string, data: ClueResponse): PracticeDeckConfig
       category: clue.category,
       value: clue.value,
       round: clue.round,
+      airDate: clue.air_date,
     });
   }
 

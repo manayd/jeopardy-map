@@ -15,6 +15,7 @@ export type PracticeCard = {
   category?: string;
   value?: number;
   round?: number;
+  airDate?: string;
 };
 
 export type PracticeDeckConfig = {

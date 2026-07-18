@@ -30,6 +30,7 @@ export type CardStat = {
   category?: string;
   value?: number;
   round?: number;
+  airDate?: string;
 };
 
 export type ModeStat = {
@@ -114,6 +115,7 @@ export function recordJudgment(input: {
   category?: string;
   value?: number;
   round?: number;
+  airDate?: string;
   /**
    * Explicit card key. The review queue re-records judgments from STORED
    * (truncated) prompts whose hash differs from the original — passing the
@@ -159,6 +161,7 @@ export function recordJudgment(input: {
   if (input.category !== undefined) card.category = input.category;
   if (input.value !== undefined) card.value = input.value;
   if (input.round !== undefined) card.round = input.round;
+  if (input.airDate !== undefined) card.airDate = input.airDate;
   reschedule(card, input.correct, now);
   stats.cards[key] = card;
   pruneCards(stats.cards);
@@ -224,6 +227,7 @@ export type DueCard = {
   category?: string;
   value?: number;
   round?: number;
+  airDate?: string;
 };
 
 /** All scheduled cards now due, most overdue first. */
@@ -245,6 +249,7 @@ export function loadDueCards(now = Date.now()): DueCard[] {
         category: card.category,
         value: card.value,
         round: card.round,
+        airDate: card.airDate,
       });
     }
   }
@@ -255,7 +260,9 @@ export function loadDueCards(now = Date.now()): DueCard[] {
 export function deckCardsMissingMeta(slug: string): boolean {
   const stats = loadDeckStats(slug);
   if (!stats) return false;
-  return Object.values(stats.cards).some((card) => card.category === undefined);
+  return Object.values(stats.cards).some(
+    (card) => card.category === undefined || card.airDate === undefined,
+  );
 }
 
 /**
@@ -265,7 +272,13 @@ export function deckCardsMissingMeta(slug: string): boolean {
  */
 export function backfillCardMeta(
   slug: string,
-  entries: Array<{ prompt: string; category?: string; value?: number; round?: number }>,
+  entries: Array<{
+    prompt: string;
+    category?: string;
+    value?: number;
+    round?: number;
+    airDate?: string;
+  }>,
 ): number {
   if (typeof window === "undefined") return 0;
   const stats = loadDeckStats(slug);
@@ -273,12 +286,16 @@ export function backfillCardMeta(
   let updated = 0;
   for (const entry of entries) {
     const card = stats.cards[cardKey(entry.prompt)];
-    if (card && card.category === undefined && entry.category !== undefined) {
+    if (!card) continue;
+    const needsCategory = card.category === undefined && entry.category !== undefined;
+    const needsDate = card.airDate === undefined && entry.airDate !== undefined;
+    if (needsCategory) {
       card.category = entry.category;
       card.value = entry.value;
       card.round = entry.round;
-      updated += 1;
     }
+    if (needsDate) card.airDate = entry.airDate;
+    if (needsCategory || needsDate) updated += 1;
   }
   if (updated > 0) saveDeckStats(stats);
   return updated;

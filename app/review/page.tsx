@@ -47,12 +47,19 @@ function nextIntervalLabel(box: number): string {
   return "Back in a month";
 }
 
-/** "OPERA SETTINGS · $400" style context line for a clue-based card. */
-function clueContext(card: { category?: string; value?: number; round?: number }): string {
+/** "OPERA SETTINGS · $400 · 1998" style context line for a clue-based card. */
+function clueContext(card: {
+  category?: string;
+  value?: number;
+  round?: number;
+  airDate?: string;
+}): string {
   const parts: string[] = [];
   if (card.category) parts.push(card.category);
   if (card.round === 3) parts.push("Final Jeopardy!");
   else if (card.value && card.value > 0) parts.push(`$${card.value}`);
+  const year = /^(\d{4})/.exec(card.airDate ?? "")?.[1];
+  if (year) parts.push(year);
   return parts.join(" · ");
 }
 
@@ -158,7 +165,13 @@ export default function ReviewPage() {
           const res = await fetch(`/api/daily?date=${date}`);
           if (!res.ok) continue;
           const data = (await res.json()) as {
-            clues?: Array<{ prompt?: string; category?: string; value?: number; round?: number }>;
+            clues?: Array<{
+              prompt?: string;
+              category?: string;
+              value?: number;
+              round?: number;
+              air_date?: string;
+            }>;
           };
           backfillCardMeta(
             "daily",
@@ -167,6 +180,7 @@ export default function ReviewPage() {
               category: c.category,
               value: c.value,
               round: c.round,
+              airDate: c.air_date,
             })),
           );
         } catch {

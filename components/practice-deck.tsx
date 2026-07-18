@@ -171,6 +171,7 @@ export function PracticeDeck({
       category: currentCard.category,
       value: currentCard.value,
       round: currentCard.round,
+      airDate: currentCard.airDate,
     });
 
     let nextNeedAgain = needAgainQueue;
@@ -240,6 +241,7 @@ export function PracticeDeck({
       category: typedCard.category,
       value: typedCard.value,
       round: typedCard.round,
+      airDate: typedCard.airDate,
     });
     setStreakBeforeJudge(typedStreak);
     setTypedPhase("judged");
@@ -318,6 +320,7 @@ export function PracticeDeck({
       category: question.prompt.category,
       value: question.prompt.value,
       round: question.prompt.round,
+      airDate: question.prompt.airDate,
     });
     setSelectedOption(option);
     setAttemptCount((value) => value + 1);
