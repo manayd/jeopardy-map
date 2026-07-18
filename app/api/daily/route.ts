@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDailyClues } from "@/lib/clue-db";
 
-const QUIZ_SIZE = 10;
+const QUIZ_SIZE = 20;
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 

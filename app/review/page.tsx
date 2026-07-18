@@ -229,7 +229,9 @@ export default function ReviewPage() {
             </h1>
             <p className="mt-4 max-w-2xl text-sm leading-relaxed text-slate-200">
               Cards you miss come back tomorrow; cards you know move out — 3 days,
-              a week, two weeks, a month. Misses always return to the front.
+              a week, two weeks, a month. Only the Daily 20 and decks you&rsquo;ve
+              completed feed this queue; in-progress decks stay in their own
+              round loop until you finish them.
             </p>
           </section>
 
@@ -256,14 +258,14 @@ export default function ReviewPage() {
                     Your review queue is clear.
                     {nextDue
                       ? ` The next card comes due ${formatUntil(nextDue)}.`
-                      : " Practice any deck and missed cards will start scheduling themselves."}
+                      : " Play the daily quiz — its clues feed this queue. Practice decks join once you complete a full flashcard run (or flip a deck's Spaced review toggle)."}
                   </p>
                   <div className="mt-4 flex flex-wrap gap-3">
                     <Link
                       href="/daily"
                       className="rounded-full bg-amber-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-amber-200"
                     >
-                      Play the Daily 10
+                      Play the Daily 20
                     </Link>
                     <Link
                       href="/practice"

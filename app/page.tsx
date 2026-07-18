@@ -552,7 +552,7 @@ export default function Home() {
                     href="/daily"
                     className="rounded-full bg-amber-300 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-amber-200"
                   >
-                    Play the Daily 10
+                    Play the Daily 20
                   </Link>
                   <Link
                     href="/practice"

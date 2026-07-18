@@ -12,7 +12,13 @@ import {
   saveFlashcardProgress,
   type FlashDirection,
 } from "@/lib/practice-progress";
-import { amendJudgmentToCorrect, recordJudgment } from "@/lib/practice-stats";
+import {
+  amendJudgmentToCorrect,
+  getDeckReviewEligibility,
+  markDeckCompleted,
+  recordJudgment,
+  setDeckReviewOptIn,
+} from "@/lib/practice-stats";
 
 type PracticeMode = "flashcards" | "multiple-choice" | "typed";
 
@@ -85,6 +91,7 @@ export function PracticeDeck({
   const [resumed, setResumed] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
   const [flashDirection, setFlashDirection] = useState<FlashDirection>("forward");
+  const [inReviewRotation, setInReviewRotation] = useState(false);
   const [question, setQuestion] = useState(() => buildQuestion(items));
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [correctCount, setCorrectCount] = useState(0);
@@ -152,6 +159,12 @@ export function PracticeDeck({
     setShowAnswer(false);
   };
 
+  const toggleReviewRotation = () => {
+    const next = !inReviewRotation;
+    setDeckReviewOptIn(deck.slug, deck.title, next);
+    setInReviewRotation(next);
+  };
+
   const nextFlashcard = () => {
     if (reviewQueue.length === 0) return;
     setQueueIndex((currentIndex) => (currentIndex + 1) % reviewQueue.length);
@@ -193,6 +206,9 @@ export function PracticeDeck({
       setShowAnswer(false);
       if (nextNeedAgain.length === 0) {
         setCompleted(true);
+        // A finished run makes the deck review-eligible from now on.
+        markDeckCompleted(deck.slug, deck.title);
+        setInReviewRotation(getDeckReviewEligibility(deck.slug));
       } else {
         setRoundComplete(true);
       }
@@ -390,6 +406,9 @@ export function PracticeDeck({
   useEffect(() => {
     if (reversible) setFlashDirection(loadFlashDirection(deck.slug));
     const saved = loadFlashcardProgress(deck.slug);
+    // Decks finished before completion tracking existed still count.
+    if (saved?.completed) markDeckCompleted(deck.slug, deck.title);
+    setInReviewRotation(getDeckReviewEligibility(deck.slug));
     if (saved && saved.deckSize === items.length) {
       const validIndex = (index: number) =>
         Number.isInteger(index) && index >= 0 && index < items.length;
@@ -482,6 +501,28 @@ export function PracticeDeck({
                   ? "Questions answered"
                   : "Responses typed"}
             </div>
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-white">Spaced review</div>
+              <div className="mt-1 text-xs leading-relaxed text-slate-400">
+                {inReviewRotation
+                  ? "In rotation — misses resurface on a schedule."
+                  : "Joins automatically once you complete the deck."}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={toggleReviewRotation}
+              aria-pressed={inReviewRotation}
+              className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold transition ${
+                inReviewRotation
+                  ? "bg-emerald-300 text-slate-950 hover:bg-emerald-200"
+                  : "border border-white/15 text-slate-200 hover:border-white/40 hover:bg-white/10"
+              }`}
+            >
+              {inReviewRotation ? "On" : "Off"}
+            </button>
           </div>
         </div>
       </div>
@@ -592,6 +633,12 @@ export function PracticeDeck({
                   You cleared every card across {round} round{round === 1 ? "" : "s"}.
                   Start over to keep the recall fresh.
                 </p>
+                {inReviewRotation && (
+                  <p className="mt-2 text-sm text-emerald-100/80">
+                    ✓ Added to your spaced review rotation — cards you miss will
+                    resurface on a schedule.
+                  </p>
+                )}
                 <div className="mt-6 flex flex-wrap gap-3">
                   <button
                     type="button"

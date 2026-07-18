@@ -14,7 +14,7 @@ const MONTH_NAMES = [
 ];
 const WEEKDAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-// Empty, then four intensities by score out of 10 — GitHub's "Less → More".
+// Empty, then four intensities by score fraction — GitHub's "Less → More".
 const TIER_CLASS = [
   "bg-white/5",
   "bg-emerald-300/25",
@@ -47,11 +47,13 @@ function parseLocalDate(iso: string): Date | null {
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
 }
 
-function tierFor(completed: boolean, score: number): number {
+// Percentage-based so 10-question and 20-question days shade consistently.
+function tierFor(completed: boolean, score: number, total: number): number {
   if (!completed) return 0;
-  if (score >= 10) return 4;
-  if (score >= 8) return 3;
-  if (score >= 5) return 2;
+  const fraction = total > 0 ? score / total : 0;
+  if (fraction >= 1) return 4;
+  if (fraction >= 0.8) return 3;
+  if (fraction >= 0.5) return 2;
   return 1;
 }
 
@@ -103,7 +105,7 @@ export function DailyHeatmap() {
   return (
     <div>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-xl font-semibold text-white">Your Daily 10 history</h2>
+        <h2 className="text-xl font-semibold text-white">Your Daily 20 history</h2>
         <p className="text-sm text-slate-300">
           {daysCompleted} day{daysCompleted === 1 ? "" : "s"} completed
         </p>
@@ -152,9 +154,13 @@ export function DailyHeatmap() {
                   if (date.getTime() > today.getTime() && !day) {
                     return <div key={date.getTime()} className="h-3 w-3" />;
                   }
-                  const tier = tierFor(Boolean(day?.completed), day?.score ?? 0);
+                  const tier = tierFor(
+                    Boolean(day?.completed),
+                    day?.score ?? 0,
+                    day?.total ?? 0,
+                  );
                   const label = day?.completed
-                    ? `${WEEKDAY_NAMES[date.getDay()]}, ${MONTH_NAMES[date.getMonth()]} ${date.getDate()}: ${day.score}/10`
+                    ? `${WEEKDAY_NAMES[date.getDay()]}, ${MONTH_NAMES[date.getMonth()]} ${date.getDate()}: ${day.score}/${day.total}`
                     : `${WEEKDAY_NAMES[date.getDay()]}, ${MONTH_NAMES[date.getMonth()]} ${date.getDate()}: not played`;
                   return (
                     <div

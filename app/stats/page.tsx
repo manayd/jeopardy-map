@@ -5,6 +5,7 @@ import Link from "next/link";
 import { SiteNav } from "@/components/site-nav";
 import { loadDailyStreak } from "@/lib/daily-quiz";
 import {
+  isReviewEligible,
   practiceHrefForSlug,
   statsSnapshot,
   type CardStat,
@@ -118,7 +119,7 @@ export default function StatsPage() {
     flashcards: "Flashcards",
     "multiple-choice": "Multiple choice",
     typed: "Typed",
-    daily: "Daily 10",
+    daily: "Daily 20",
     review: "Review",
   };
 
@@ -126,6 +127,7 @@ export default function StatsPage() {
     const now = Date.now();
     let count = 0;
     for (const deck of decks) {
+      if (!isReviewEligible(deck)) continue;
       for (const card of Object.values(deck.cards)) {
         if (card.due !== undefined && card.due <= now) count += 1;
       }
@@ -183,7 +185,7 @@ export default function StatsPage() {
             </div>
             {streak && (
               <p className="mt-4 text-sm text-slate-300">
-                Daily 10 streak: 🔥 {streak.streak} day{streak.streak === 1 ? "" : "s"}
+                Daily 20 streak: 🔥 {streak.streak} day{streak.streak === 1 ? "" : "s"}
                 {" · "}best {streak.bestStreak}
               </p>
             )}

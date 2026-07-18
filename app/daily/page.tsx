@@ -111,7 +111,7 @@ export default function DailyQuizPage() {
   const commitVerdict = (verdict: "correct" | "incorrect") => {
     recordJudgment({
       slug: "daily",
-      title: "The Daily 10",
+      title: "The Daily 20",
       mode: "daily",
       prompt: currentClue.prompt,
       answer: currentClue.answer,
@@ -181,13 +181,13 @@ export default function DailyQuizPage() {
             <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <p className="text-sm uppercase tracking-[0.25em] text-indigo-200">
-                  The Daily 10 · {date}
+                  The Daily 20 · {date}
                 </p>
                 <h1 className="mt-3 text-4xl font-semibold text-white">
-                  Ten clues from the whole archive.
+                  Twenty clues from the whole archive.
                 </h1>
                 <p className="mt-4 max-w-2xl text-sm leading-relaxed text-slate-200">
-                  Same ten for everyone today, easy to hard. Type your responses —
+                  Same twenty for everyone today, easy to hard. Type your responses —
                   spelling close enough counts.
                 </p>
               </div>

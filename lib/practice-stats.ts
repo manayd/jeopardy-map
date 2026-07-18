@@ -47,6 +47,13 @@ export type DeckStats = {
   byMode: Partial<Record<JudgmentMode, ModeStat>>;
   lastPracticed: number;
   cards: Record<string, CardStat>;
+  /** Set when the user first completes a full flashcard run of this deck. */
+  completedAt?: number;
+  /**
+   * Manual override for spaced-review eligibility. When set it wins over the
+   * default rule (daily always in; other decks join once completed).
+   */
+  reviewOptIn?: boolean;
 };
 
 const PREFIX = "jeopardy-map:stats:";
@@ -73,6 +80,57 @@ function cardKey(prompt: string): string {
     hash = Math.imul(hash, 16777619);
   }
   return (hash >>> 0).toString(36);
+}
+
+/**
+ * Whether a deck's cards belong in the spaced-review queue.
+ *
+ * Default rule: the daily quiz is always in (its clues are one-shot
+ * encounters with no other home), while practice decks join once the user
+ * has completed a full flashcard run — until then the deck's own
+ * round-based loop is the study surface and review would just duplicate
+ * it. A manual opt-in/out override always wins.
+ */
+export function isReviewEligible(deck: DeckStats): boolean {
+  if (deck.reviewOptIn !== undefined) return deck.reviewOptIn;
+  if (deck.slug === "daily") return true;
+  return deck.completedAt !== undefined;
+}
+
+/** Effective review eligibility for a deck by slug (false when no stats yet). */
+export function getDeckReviewEligibility(slug: string): boolean {
+  if (typeof window === "undefined") return false;
+  const stats = loadDeckStats(slug);
+  if (!stats) return slug === "daily";
+  return isReviewEligible(stats);
+}
+
+const emptyDeckStats = (slug: string, title: string): DeckStats => ({
+  version: 1,
+  slug,
+  title,
+  attempts: 0,
+  correct: 0,
+  byMode: {},
+  lastPracticed: Date.now(),
+  cards: {},
+});
+
+/** Record that the user completed a full flashcard run (first time only). */
+export function markDeckCompleted(slug: string, title: string) {
+  if (typeof window === "undefined") return;
+  const stats = loadDeckStats(slug) ?? emptyDeckStats(slug, title);
+  if (stats.completedAt !== undefined) return;
+  stats.completedAt = Date.now();
+  saveDeckStats(stats);
+}
+
+/** Manually pull a deck into or out of the spaced-review rotation. */
+export function setDeckReviewOptIn(slug: string, title: string, optIn: boolean) {
+  if (typeof window === "undefined") return;
+  const stats = loadDeckStats(slug) ?? emptyDeckStats(slug, title);
+  stats.reviewOptIn = optIn;
+  saveDeckStats(stats);
 }
 
 function loadDeckStats(slug: string): DeckStats | null {
@@ -230,10 +288,11 @@ export type DueCard = {
   airDate?: string;
 };
 
-/** All scheduled cards now due, most overdue first. */
+/** All scheduled cards now due from review-eligible decks, most overdue first. */
 export function loadDueCards(now = Date.now()): DueCard[] {
   const out: DueCard[] = [];
   for (const deck of loadAllDeckStats()) {
+    if (!isReviewEligible(deck)) continue;
     for (const [key, card] of Object.entries(deck.cards)) {
       if (card.due === undefined || card.due > now) continue;
       out.push({
@@ -305,6 +364,7 @@ export function backfillCardMeta(
 export function nextDueAt(now = Date.now()): number | null {
   let next: number | null = null;
   for (const deck of loadAllDeckStats()) {
+    if (!isReviewEligible(deck)) continue;
     for (const card of Object.values(deck.cards)) {
       if (card.due === undefined || card.due <= now) continue;
       if (next === null || card.due < next) next = card.due;
