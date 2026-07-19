@@ -3,6 +3,7 @@
 import { useMemo, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { SiteNav } from "@/components/site-nav";
+import { clueMetaLabel } from "@/lib/clue-meta";
 import { loadDailyStreak } from "@/lib/daily-quiz";
 import {
   isReviewEligible,
@@ -368,6 +369,11 @@ export default function StatsPage() {
                         key={`${card.deckSlug}-${card.prompt.slice(0, 40)}`}
                         className="rounded-2xl border border-rose-300/15 bg-rose-300/5 p-4"
                       >
+                        {clueMetaLabel(card) && (
+                          <div className="mb-1.5 text-[11px] uppercase tracking-[0.2em] text-indigo-200/80">
+                            {clueMetaLabel(card)}
+                          </div>
+                        )}
                         <p className="text-sm leading-relaxed text-slate-100">
                           {card.prompt}
                         </p>

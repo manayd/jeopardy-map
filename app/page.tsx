@@ -12,6 +12,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { SiteNav } from "@/components/site-nav";
+import { clueMetaLabel } from "@/lib/clue-meta";
 import { statsSnapshot, type DeckStats } from "@/lib/practice-stats";
 
 type CurriculumSubject = {
@@ -91,8 +92,6 @@ function subjectForSlug(slug: string): string | null {
   if (node.startsWith("cat:")) return null;
   return node;
 }
-
-const clueYear = (airDate?: string) => /^(\d{4})/.exec(airDate ?? "")?.[1] ?? "";
 
 const drillHref = (nodeId: string) => `/practice/topic/${encodeURIComponent(nodeId)}`;
 
@@ -284,9 +283,12 @@ export default function CurriculumPage() {
                             className="rounded-2xl border border-white/10 bg-slate-950/50 p-4"
                           >
                             <div className="text-[11px] uppercase tracking-[0.2em] text-indigo-200/80">
-                              {clue.category}
-                              {clue.value > 0 && ` · $${clue.value}`}
-                              {clueYear(clue.air_date) && ` · ${clueYear(clue.air_date)}`}
+                              {clueMetaLabel({
+                                category: clue.category,
+                                value: clue.value,
+                                round: clue.round,
+                                airDate: clue.air_date,
+                              })}
                             </div>
                             <p className="mt-2 text-sm leading-relaxed text-slate-100">
                               {clue.prompt}

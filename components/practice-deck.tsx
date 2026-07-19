@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { judgeAnswer } from "@/lib/answer-match";
+import { clueMetaLabel } from "@/lib/clue-meta";
 import type { PracticeCard, PracticeDeckConfig } from "@/lib/practice-data";
 import {
   clearFlashcardProgress,
@@ -722,6 +723,12 @@ export function PracticeDeck({
                 <div className="rounded-[2rem] border border-white/10 bg-[linear-gradient(160deg,rgba(15,23,42,0.95),rgba(30,41,59,0.85))] p-6 lg:p-8">
                   <p className="text-[11px] uppercase tracking-[0.26em] text-indigo-200">
                     {frontLabel}
+                    {clueMetaLabel(currentCard) && (
+                      <span className="text-indigo-200/60">
+                        {" "}
+                        · {clueMetaLabel(currentCard)}
+                      </span>
+                    )}
                   </p>
                   <div className="mt-5 text-3xl font-semibold text-white lg:text-5xl">
                     {frontText}
@@ -850,7 +857,15 @@ export function PracticeDeck({
             </div>
 
             <div className="rounded-[2rem] border border-white/10 bg-[linear-gradient(160deg,rgba(15,23,42,0.95),rgba(30,41,59,0.85))] p-6 lg:p-8">
-              <p className="text-[11px] uppercase tracking-[0.26em] text-indigo-200">Prompt</p>
+              <p className="text-[11px] uppercase tracking-[0.26em] text-indigo-200">
+                Prompt
+                {clueMetaLabel(question.prompt) && (
+                  <span className="text-indigo-200/60">
+                    {" "}
+                    · {clueMetaLabel(question.prompt)}
+                  </span>
+                )}
+              </p>
               <h3 className="mt-4 text-2xl font-semibold text-white lg:text-4xl">
                 {deck.questionPrompt(question.prompt)}
               </h3>
@@ -950,7 +965,15 @@ export function PracticeDeck({
             </div>
 
             <div className="rounded-[2rem] border border-white/10 bg-[linear-gradient(160deg,rgba(15,23,42,0.95),rgba(30,41,59,0.85))] p-6 lg:p-8">
-              <p className="text-[11px] uppercase tracking-[0.26em] text-indigo-200">Prompt</p>
+              <p className="text-[11px] uppercase tracking-[0.26em] text-indigo-200">
+                Prompt
+                {clueMetaLabel(typedCard) && (
+                  <span className="text-indigo-200/60">
+                    {" "}
+                    · {clueMetaLabel(typedCard)}
+                  </span>
+                )}
+              </p>
               <h3 className="mt-4 text-2xl font-semibold text-white lg:text-4xl">
                 {deck.questionPrompt(typedCard)}
               </h3>
