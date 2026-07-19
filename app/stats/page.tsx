@@ -135,6 +135,36 @@ export default function StatsPage() {
     return count;
   }, [decks]);
 
+  // Accuracy stratified by clue value: where does recall fall off as the
+  // board gets harder? Uses only cards with Jeopardy value metadata.
+  const valueBands = useMemo(() => {
+    const bands = [
+      { label: "$100–$400", min: 100, max: 400, attempts: 0, correct: 0 },
+      { label: "$500–$800", min: 500, max: 800, attempts: 0, correct: 0 },
+      { label: "$1000–$1200", min: 1000, max: 1200, attempts: 0, correct: 0 },
+      { label: "$1600+", min: 1600, max: Infinity, attempts: 0, correct: 0 },
+      { label: "Final Jeopardy", min: 0, max: 0, attempts: 0, correct: 0 },
+    ];
+    const finalBand = bands[bands.length - 1];
+    for (const deck of decks) {
+      for (const card of Object.values(deck.cards)) {
+        const correct = card.attempts - card.misses;
+        if (card.round === 3) {
+          finalBand.attempts += card.attempts;
+          finalBand.correct += correct;
+          continue;
+        }
+        if (card.value === undefined || card.value <= 0) continue;
+        const band = bands.find((b) => card.value! >= b.min && card.value! <= b.max);
+        if (band && band !== finalBand) {
+          band.attempts += card.attempts;
+          band.correct += correct;
+        }
+      }
+    }
+    return bands.filter((b) => b.attempts > 0);
+  }, [decks]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-slate-50">
       <div className="relative overflow-hidden">
@@ -278,6 +308,46 @@ export default function StatsPage() {
                           >
                             Drill →
                           </Link>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
+
+              {valueBands.length > 0 && (
+                <section className="mt-6 rounded-[2rem] border border-white/10 bg-white/6 p-6 shadow-2xl shadow-black/30 backdrop-blur-xl lg:p-8">
+                  <h2 className="text-xl font-semibold text-white">Accuracy by value</h2>
+                  <p className="mt-1 text-sm text-slate-300">
+                    Higher-value clues are harder — see where your accuracy drops
+                    off.
+                  </p>
+                  <div className="mt-5 space-y-3">
+                    {valueBands.map((band) => {
+                      const accuracy = accuracyOf(band.attempts, band.correct);
+                      return (
+                        <div key={band.label} className="flex items-center gap-4">
+                          <div className="w-28 shrink-0 text-sm text-slate-200">
+                            {band.label}
+                          </div>
+                          <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/10">
+                            <div
+                              className={`h-full rounded-full ${
+                                accuracy < 50
+                                  ? "bg-rose-400"
+                                  : accuracy < 75
+                                    ? "bg-amber-300"
+                                    : "bg-emerald-300"
+                              }`}
+                              style={{ width: `${Math.max(accuracy, 4)}%` }}
+                            />
+                          </div>
+                          <div className={`w-12 shrink-0 text-right text-sm font-semibold ${accuracyTone(accuracy)}`}>
+                            {accuracy}%
+                          </div>
+                          <div className="w-24 shrink-0 text-right text-xs text-slate-400">
+                            {band.attempts} judgment{band.attempts === 1 ? "" : "s"}
+                          </div>
                         </div>
                       );
                     })}

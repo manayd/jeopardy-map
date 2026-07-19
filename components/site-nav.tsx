@@ -5,7 +5,7 @@ type SiteNavProps = {
 };
 
 const links = [
-  { href: "/", label: "Map", key: "map" },
+  { href: "/", label: "Curriculum", key: "map" },
   { href: "/practice", label: "Practice", key: "practice" },
   { href: "/daily", label: "Daily 20", key: "daily" },
   { href: "/review", label: "Review", key: "review" },

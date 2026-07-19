@@ -1,8 +1,16 @@
 import { NextResponse } from "next/server";
-import { countCluesForNode, getCategory, getCluesForNode } from "@/lib/clue-db";
+import {
+  countCluesForNode,
+  getCategory,
+  getCluesForNode,
+  type ClueFormat,
+} from "@/lib/clue-db";
 import { findTopic, loadTopicTree } from "@/lib/topic-tree";
 
+const VALID_FORMATS = new Set<ClueFormat>(["standard", "wordplay", "fill-in", "media"]);
+
 const parseLimit = (value: string | null, fallback: number, max: number) => {
+  if (value === null) return fallback;
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
   return Math.min(Math.max(Math.floor(parsed), 1), max);
@@ -34,6 +42,21 @@ export async function GET(
     // full clue pool. Same seed, same deck; new seed, fresh deck.
     const seed = parseSeed(url.searchParams.get("seed"));
 
+    // Optional filters: ?minValue=800 (hard mode) and ?format=standard,fill-in
+    const minValue = (() => {
+      const parsed = Number(url.searchParams.get("minValue"));
+      return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : undefined;
+    })();
+    const formats = (() => {
+      const raw = url.searchParams.get("format");
+      if (!raw) return undefined;
+      const parsed = raw
+        .split(",")
+        .map((f) => f.trim())
+        .filter((f): f is ClueFormat => VALID_FORMATS.has(f as ClueFormat));
+      return parsed.length > 0 ? parsed : undefined;
+    })();
+
     let title: string;
 
     if (id.startsWith("cat:")) {
@@ -42,6 +65,18 @@ export async function GET(
         return NextResponse.json({ error: "Category not found." }, { status: 404 });
       }
       title = category.title;
+    } else if (id.startsWith("subj:") || id.startsWith("canon:")) {
+      const subject = id.slice(id.indexOf(":") + 1);
+      if (id === "canon:all") {
+        title = "The Jeopardy Canon";
+      } else {
+        const tree = await loadTopicTree();
+        const topic = findTopic(tree, subject);
+        if (!topic) {
+          return NextResponse.json({ error: "Subject not found." }, { status: 404 });
+        }
+        title = id.startsWith("canon:") ? `${topic.title} Canon` : topic.title;
+      }
     } else {
       const tree = await loadTopicTree();
       const topic = findTopic(tree, id);
@@ -51,8 +86,8 @@ export async function GET(
       title = topic.title;
     }
 
-    const total = countCluesForNode(id);
-    const clues = getCluesForNode(id, { limit, offset, seed });
+    const total = countCluesForNode(id, { minValue, formats });
+    const clues = getCluesForNode(id, { limit, offset, seed, minValue, formats });
 
     return NextResponse.json({ id, title, total, offset, limit, clues });
   } catch {

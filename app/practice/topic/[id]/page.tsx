@@ -52,6 +52,34 @@ function rotateSeed(topicId: string): number {
   return seed;
 }
 
+// Deck filters, persisted per topic like the seed.
+type Difficulty = "any" | "800" | "1600";
+type ClueType = "all" | "standard";
+
+function loadSetting<T extends string>(
+  storageKey: string,
+  allowed: readonly T[],
+  fallback: T,
+): T {
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    return allowed.includes(raw as T) ? (raw as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function saveSetting(storageKey: string, value: string) {
+  try {
+    window.localStorage.setItem(storageKey, value);
+  } catch {
+    // non-fatal
+  }
+}
+
+const difficultyKey = (topicId: string) => `jeopardy-map:deck-difficulty:topic-${topicId}`;
+const clueTypeKey = (topicId: string) => `jeopardy-map:deck-format:topic-${topicId}`;
+
 function buildTopicDeck(topicId: string, data: ClueResponse): PracticeDeckConfig {
   const seen = new Set<string>();
   const items: PracticeCard[] = [];
@@ -105,10 +133,23 @@ export default function TopicPracticePage({
   const [status, setStatus] = useState<"loading" | "error" | "ready">("loading");
   const [deck, setDeck] = useState<PracticeDeckConfig | null>(null);
   const [seed, setSeed] = useState<number | null>(null);
+  const [difficulty, setDifficulty] = useState<Difficulty>("any");
+  const [clueType, setClueType] = useState<ClueType>("all");
 
   useEffect(() => {
     setSeed(loadOrCreateSeed(topicId));
+    setDifficulty(loadSetting(difficultyKey(topicId), ["any", "800", "1600"] as const, "any"));
+    setClueType(loadSetting(clueTypeKey(topicId), ["all", "standard"] as const, "all"));
   }, [topicId]);
+
+  const pickDifficulty = (value: Difficulty) => {
+    setDifficulty(value);
+    saveSetting(difficultyKey(topicId), value);
+  };
+  const pickClueType = (value: ClueType) => {
+    setClueType(value);
+    saveSetting(clueTypeKey(topicId), value);
+  };
 
   useEffect(() => {
     if (seed === null) return;
@@ -116,8 +157,11 @@ export default function TopicPracticePage({
     const load = async () => {
       setStatus("loading");
       try {
+        const filterParams =
+          (difficulty !== "any" ? `&minValue=${difficulty}` : "") +
+          (clueType === "standard" ? "&format=standard,fill-in" : "");
         const response = await fetch(
-          `/api/topics/${encodeURIComponent(topicId)}/clues?limit=${CLUE_FETCH_LIMIT}&seed=${seed}`,
+          `/api/topics/${encodeURIComponent(topicId)}/clues?limit=${CLUE_FETCH_LIMIT}&seed=${seed}${filterParams}`,
         );
         if (!response.ok) throw new Error("Failed to load clues");
         const data = (await response.json()) as ClueResponse;
@@ -133,7 +177,7 @@ export default function TopicPracticePage({
     return () => {
       alive = false;
     };
-  }, [topicId, seed]);
+  }, [topicId, seed, difficulty, clueType]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-slate-50">
@@ -158,6 +202,61 @@ export default function TopicPracticePage({
                       ? "Pulling real Jeopardy clues for this topic from the archive."
                       : "We could not load clues for this topic."}
                 </p>
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <div
+                    role="group"
+                    aria-label="Difficulty"
+                    className="inline-flex rounded-full border border-white/10 bg-slate-950/50 p-1"
+                  >
+                    {(
+                      [
+                        ["any", "Any value"],
+                        ["800", "$800+"],
+                        ["1600", "$1600+"],
+                      ] as const
+                    ).map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        aria-pressed={difficulty === value}
+                        onClick={() => pickDifficulty(value)}
+                        className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                          difficulty === value
+                            ? "bg-emerald-300 text-slate-950"
+                            : "text-slate-200 hover:bg-white/10"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <div
+                    role="group"
+                    aria-label="Clue type"
+                    className="inline-flex rounded-full border border-white/10 bg-slate-950/50 p-1"
+                  >
+                    {(
+                      [
+                        ["all", "All types"],
+                        ["standard", "Standard only"],
+                      ] as const
+                    ).map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        aria-pressed={clueType === value}
+                        onClick={() => pickClueType(value)}
+                        className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                          clueType === value
+                            ? "bg-emerald-300 text-slate-950"
+                            : "text-slate-200 hover:bg-white/10"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
               <div className="flex flex-wrap gap-3">
                 <Link
@@ -179,7 +278,7 @@ export default function TopicPracticePage({
           <div className="mt-6">
             {status === "ready" && deck ? (
               <PracticeDeck
-                key={seed}
+                key={`${seed}-${difficulty}-${clueType}`}
                 deck={deck}
                 onRestart={() => setSeed(rotateSeed(topicId))}
               />
