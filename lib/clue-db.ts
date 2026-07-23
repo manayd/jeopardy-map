@@ -33,12 +33,47 @@ const globalForDb = globalThis as unknown as {
   __clueDb?: Database.Database;
 };
 
+/**
+ * Deterministic per-seed shuffle key for a clue id (splitmix64 avalanche,
+ * 53-bit output so it fits a JS/SQLite number). Registered as the SQL
+ * function `shuffle_key(id, seed)` and used in ORDER BY: the same seed
+ * always yields the same permutation, different seeds yield unrelated ones.
+ *
+ * Replaces a broken linear multiplier (`seed*2^16 + 32769`) under which any
+ * clue whose id was divisible by 2^16 had the seed term vanish mod 2^32 —
+ * freezing it near the top of every day's Daily quiz.
+ */
+const SK_C1 = BigInt("0x9e3779b97f4a7c15");
+const SK_C2 = BigInt("0xd1b54a32d192ed03");
+const SK_C3 = BigInt("0xbf58476d1ce4e5b9");
+const SK_C4 = BigInt("0x94d049bb133111eb");
+const SK_S30 = BigInt(30);
+const SK_S27 = BigInt(27);
+const SK_S31 = BigInt(31);
+const SK_OUT = BigInt("0x1fffffffffffff"); // 53 bits — safe as a JS number
+
+function shuffleKey(id: number, seed: number): number {
+  let x =
+    BigInt.asUintN(64, BigInt(id) * SK_C1) ^ BigInt.asUintN(64, BigInt(seed) * SK_C2);
+  x = BigInt.asUintN(64, x);
+  x ^= x >> SK_S30;
+  x = BigInt.asUintN(64, x * SK_C3);
+  x ^= x >> SK_S27;
+  x = BigInt.asUintN(64, x * SK_C4);
+  x ^= x >> SK_S31;
+  return Number(x & SK_OUT);
+}
+
 export function getClueDb(): Database.Database {
   if (!globalForDb.__clueDb) {
-    globalForDb.__clueDb = new Database(DB_PATH, {
+    const db = new Database(DB_PATH, {
       readonly: true,
       fileMustExist: true,
     });
+    db.function("shuffle_key", { deterministic: true }, (id: unknown, seed: unknown) =>
+      shuffleKey(Number(id), Number(seed)),
+    );
+    globalForDb.__clueDb = db;
   }
   return globalForDb.__clueDb;
 }
@@ -164,17 +199,6 @@ export function countCluesForNode(
 }
 
 /**
- * Deterministic pseudo-shuffle multiplier. Multiplying clue ids by a large
- * odd seed-derived constant modulo 2^32 permutes them differently per seed,
- * so the same seed always yields the same "random" deck while different
- * seeds yield genuinely different ones.
- */
-function shuffleMultiplier(seed: number): number {
-  const s = Math.abs(Math.floor(seed)) % 65536;
-  return s * 65536 + 32769;
-}
-
-/**
  * A seed-deterministic sample of the ENTIRE archive. Media clues ("seen
  * here", audio/video markers) are excluded since they're unanswerable as
  * text — the format column computed at build time encodes exactly that.
@@ -188,14 +212,14 @@ export function getDailyClues(seed: number, limit: number): ClueRow[] {
        FROM clues
        JOIN categories ON categories.id = clues.category_id
        WHERE clues.format != 'media'
-       ORDER BY (clues.id * ${shuffleMultiplier(seed)}) % 4294967296
+       ORDER BY shuffle_key(clues.id, ?)
        LIMIT ?`,
     )
-    .all(limit) as ClueRow[];
+    .all(seed, limit) as ClueRow[];
 }
 
 export function getCluesForNode(nodeId: string, options: ClueQueryOptions): ClueRow[] {
-  const mult = shuffleMultiplier(options.seed ?? 0);
+  const seed = options.seed ?? 0;
   if (isCanonNode(nodeId)) {
     // One representative clue per top answer: SQLite's bare-column MIN()
     // picks the row achieving the minimum, so the representative follows
@@ -207,7 +231,7 @@ export function getCluesForNode(nodeId: string, options: ClueQueryOptions): Clue
         `SELECT clues.prompt, clues.answer, clues.round, clues.value,
                 clues.daily_double_value, clues.air_date,
                 categories.title AS category,
-                MIN((clues.id * ${mult}) % 4294967296) AS ord
+                MIN(shuffle_key(clues.id, ?)) AS ord
          FROM clues
          JOIN categories ON categories.id = clues.category_id
          JOIN ${canon.sql} top ON top.key = clues.answer_key
@@ -216,13 +240,10 @@ export function getCluesForNode(nodeId: string, options: ClueQueryOptions): Clue
          ORDER BY ord
          LIMIT ? OFFSET ?`,
       )
-      .all(...canon.params, options.limit, options.offset) as ClueRow[];
+      .all(seed, ...canon.params, options.limit, options.offset) as ClueRow[];
   }
   const filter = applyOptionFilters(filterForNode(nodeId), options);
-  const orderBy =
-    options.seed !== undefined
-      ? `(clues.id * ${mult}) % 4294967296`
-      : "clues.id";
+  const seeded = options.seed !== undefined;
   return getClueDb()
     .prepare(
       `SELECT clues.prompt, clues.answer, clues.round, clues.value,
@@ -231,10 +252,15 @@ export function getCluesForNode(nodeId: string, options: ClueQueryOptions): Clue
        FROM clues
        JOIN categories ON categories.id = clues.category_id
        ${whereClause(filter)}
-       ORDER BY ${orderBy}
+       ORDER BY ${seeded ? "shuffle_key(clues.id, ?)" : "clues.id"}
        LIMIT ? OFFSET ?`,
     )
-    .all(...filter.params, options.limit, options.offset) as ClueRow[];
+    .all(
+      ...filter.params,
+      ...(seeded ? [seed] : []),
+      options.limit,
+      options.offset,
+    ) as ClueRow[];
 }
 
 // ---------------------------------------------------------------------------
